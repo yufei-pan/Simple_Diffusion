@@ -1,7 +1,7 @@
-
+# !/usr/bin/python3
 from xml.dom.pulldom import parseString
 from flask import Flask, flash, redirect, render_template, request, session, abort, escape,jsonify
-import os , requests, json, datetime
+import os , requests, json, datetime, uuid
 
 
 # def findArtist(text):
@@ -28,6 +28,11 @@ import os , requests, json, datetime
 #     return json.dumps(dic)
 
 
+# now we try to read the db stored
+# we will store the image data to csv line by line additively
+
+
+
 def getImage(UUID):
     print("Retreiving Image "+UUID+"...")
     pass
@@ -43,7 +48,7 @@ def getInfo(UUID):
 def newImage(args):
     print("Generating a Image using")
     print(args)
-    pass
+    return json.dumps({'UUID':str(uuid.uuid4()),'Queue':1})
 
 def diffuseImage(args):
     print("Generating Image"+args.UUID+" using")

@@ -24,6 +24,7 @@
 
 <div id = 'Load_Image'>
     <h2>Load Image </h2>
+    <h3 id="queue_pos_display">Position In Queue: <div id="queue_pos">Press Generate! First!</div></h3>
     <!-- Here we load the image somehow -->
     <!-- We either generate from promt, -->
     <!-- or load from a image in server database, -->
@@ -31,8 +32,7 @@
     <!-- or get a image silimar to a image in server db, -->
     <!-- or maybe load a image from a url (future feature?), -->
     
-
-    <form>
+    <form id="generate">
         <fieldset>
             <legend>Method 1: Generate using prompt:</legend>
             <label for="positive_prompt_gen">Positive Prompt:</label><br>
@@ -47,13 +47,17 @@
             <input type="radio" id="Heun_gen" name="sampler_gen" value="Heun">
             <label for="Heun_gen">More Creative: Heun</label><br>
             <input type="radio" id="DDIM_gen" name="sampler_gen" value="DDIM">
-            <label for="DDIM_gen">Neural: DDIM</label><br><br>
+            <label for="DDIM_gen">Neural: DDIM</label><br>
+            <input type="radio" id="Eular_a_gen" name="sampler_gen" value="Eular_a">
+            <label for="Eular_a_gen">Something different: Eular Ancestry</label><br>
+            <input type="radio" id="LMS_gen" name="sampler_gen" value="LMS">
+            <label for="LMS_gen">Stable: LMS</label><br><br>
             <label for="seed_gen">Seed:</label><br>
             <input type="text" id="seed_gen" name="seed" value="-1"><br>
             <input type="submit" value="Generate!">
         </fieldset>
     </form>
-    <form>
+    <form id="load_from_server">
         <fieldset>
             <legend>Method 2: Load a image in server:</legend>
             <label for="load_uuid">Load image UUID:</label><br>
@@ -61,7 +65,7 @@
             <input type="submit" value="Generate!">
         </fieldset>
     </form>
-    <form>
+    <form id="generate_like">
         <fieldset>
             <legend>Method 3: Generate image using tags from image in server:</legend>
             <label for="like_uuid">Generate use image UUID:</label><br>
@@ -69,7 +73,7 @@
             <input type="submit" value="Generate!">
         </fieldset>
     </form>
-    <form>
+    <form id="upload_image">
         <fieldset>
             <legend>Method 4: Upload and load a image from local machine:</legend>
             <label for="myfile">Select a file:</label>
@@ -82,7 +86,9 @@
 <div id="Source_Image_View">
     <!-- Here is the image view window -->
     <!-- We will also have a button to download the picture -->
-
+    <div id="Source_Image">
+        <img src="static/source_image_placeholder.webp" alt="Source Image Here">
+    </div>
 </div>
 
 <div id="Info">
@@ -92,12 +98,41 @@
 
 <div id = 'Queue_View'>
     <!-- Here is the queue from the server, updated automaticly  -->
+
 </div>
 
-<div id="Process">
+<div id="Process_div">
     <!-- Here we put the prompts for further processing -->
     <!-- Here we put a Button to upscale the Image using SwinIR -->
     <!-- Will adapt height and width automaticlly -->
+    <form id="process">
+        <fieldset>
+            <legend>How you want to tweeck the picture:</legend>
+            <label for="positive_prompt_process">Positive Prompt:</label><br>
+            <input type="text" id="positive_prompt_process" name="positive_prompt" value=""><br>
+            <label for="negative_prompt_process">Negative Prompt:</label><br>
+            <input type="text" id="negative_prompt_process" name="negative_prompt" value=""><br>
+            <br>
+            <label for="denoise_strength">Creativity Delta: <p id="denoiseDisplay">0</p></label>
+            <input type="range" id="denoise_strength" name="denoise_strength" min="-69" max="69"value = "0" step='1' oninput="denoiseDisplay.innerText = this.value"><br>
+            <br>
+            <label for="sampler_process">Sampler Method:</label><br>
+            <input type="radio" id="DDIM_process" name="sampler_process" value="DDIM" checked="checked">
+            <label for="DDIM_process">Default: Inspired: DDIM</label><br>
+            <input type="radio" id="LMS_process" name="sampler_process" value="LMS">
+            <label for="LMS_process">Enhance: LMS</label><br>
+            <input type="radio" id="DPM2KAA_process" name="sampler_process" value="DPM2KAA">
+            <label for="DPM2KAA_process">Regeneration: DMP2 a Karras</label><br>
+            <input type="radio" id="Heun_process" name="sampler_process" value="Heun">
+            <label for="Heun_process">Redraw: Heun</label><br>
+            <input type="radio" id="Eular_a_process" name="sampler_process" value="Eular_a">
+            <label for="Eular_a_process">More Creative: Eular Ancestry</label><br>
+            <br>
+            <label for="seed_process">Seed:</label><br>
+            <input type="text" id="seed_process" name="seed" value="-1"><br>
+            <input type="submit" value="Generate!">
+        </fieldset>
+    </form>
 </div>
 
 <div id="Final_Image_View">
@@ -106,63 +141,52 @@
     <!-- Also a button to send to original image view -->
     <!-- This is done by simpily remove image from here, add image to above -->
     <!-- Importantly, the hidden ID for the image in source will be the UUID of pic -->
+    <img alt="The generated image will be here"><br>
+    <button type="button" id="Download">Download</button>   
+    <button type="button" id="send_to_process">Send to Process again</button>
 </div>
 
 
 <script type = "text/javascript">
-// $(document).ready( function () {
-//     $('#search').on( "submit", function(e){
-//         console.log('Highlighted values are:')
-//         console.log($('#card_list').html())
-//         if ($('#no_result').length){
-//             // This means there is nothing selected, replace the cards panel.
-//             console.log('Nothing!')
-//             $("#card_list").html('');
-//         }
-//         $("#artist-detail").html('<img id="loading_gif" src="/static/loading.gif" />');
-//         console.log($(this).serialize());
-//         // url from where we want to get the data
-//         $.getJSON("https://discodization20.appspot.com/search",{text:$('#text_input').val()}, function(data) {
-//             $("#card_list").html(formCardPanel(data));
-//             $("#artist-detail").html('');
-//         });
-//         e.preventDefault();
-//     });
-//     $('#clear').click( function(){
-//         $('#text_input').val('')
-//     });
-// });
-// function formCardPanel(data){
-//     $("#card_list").html('');
-//     var count = 0;
-//     var cards = $("<div class='cards'></dev>");
-//     for (let element in data){
-//         console.log(data[element]);
-//         var card = $("<div class='card' id='"+element+"'><img class='thumbnail' src='"+data[element][1]+"'/><br/>"+data[element][0]+"</div>");
-//         card.click( function(){
-//             formArtistDetail(element);
-//         });
-//         cards.append(card);
-//         count++;
-//     }
-//     if (count == 0){
-//         $("#card_list").html('<div id = "no_result">No results found.</div>');
-//     }else{
-//         $("#card_list").html('');
-//         $("#card_list").append(cards)
-//     }
-// }
-// function formArtistDetail(aid){
-//     console.log(aid);
-//     $(".card").css('background-color', '#205375')
-//     $("#"+aid).css('background-color', '#112B3C')
-//     $("#artist-detail").html('<img id="loading_gif" src="/static/loading.gif" />');
-//     $.getJSON("https://discodization20.appspot.com/artist-detail",{text:aid}, function(data) {
-//         console.log(data);
-//         $("#artist-detail").html('<h1>'+data['name']+' ('+data['birthday']+' - '+data['deathday']+')</h1><h2>'+data['nationality']+'</h2><p>'+data['biography']+'</p>');
-        
-//     });
-// }
+    $(document).ready( function () {
+        // Section for handling loading of image
+        $('#generate').on( "submit", function(e){
+            console.log('Generating results using');
+            var ele = document.getElementsByName('sampler_gen');
+            for(i = 0; i < ele.length; i++) {
+                if(ele[i].checked)
+                sampler_gen = ele[i].value;
+            }
+            
+            var genDic = {
+                Positive:$('#positive_prompt_gen').val(),
+                Negative:$('#negative_prompt_gen').val(),
+                Ratio:$('#ratio').val(),
+                Sampler: sampler_gen,
+                Seed:$('#seed_gen').val()
+            };
+            console.log(genDic);
+            $.post("new",genDic, function(data) {
+                console.log("Response: ");
+                console.log(data);
+                $('#queue_pos').html(data['Queue'])
+            }, "json");
+          e.preventDefault();
+        });
+
+        $('#load_from_server').on( "submit", function(e){
+            console.log('Load image using');
+            var uuidReq = $('#load_uuid').val()
+            console.log(uuidReq);
+            $.post("image",{uuid:uuidReq}, function(data) {
+                console.log("Response: ");
+                console.log(data);
+                $('#queue_pos').html(data['Queue'])
+            }, "json");
+          e.preventDefault();
+        });
+    }
+    ); 
 </script>
 <footer></footer>
 </body>
