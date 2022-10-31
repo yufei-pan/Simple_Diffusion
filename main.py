@@ -30,6 +30,23 @@ import os , requests, json, datetime, uuid
 
 # now we try to read the db stored
 # we will store the image data to csv line by line additively
+imageDic = {}
+with open('images.tsv', mode ='r',encoding='utf8')as file:
+    line = file.readline()
+    assert line.strip().startswith('UUID\tparameters'), "Data format error!"
+    line = file.readline()
+    while line:
+        cache = line.strip().split('\t')
+        imageDic[cache[0]] = json.loads(' '.join(cache[1:]))
+        line = file.readline()
+
+# clean
+line ,cache = 0,0
+
+
+    
+
+
 
 
 
