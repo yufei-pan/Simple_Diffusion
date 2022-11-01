@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-<script type = "text/javascript" src = "https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
-<title>Simple Diffusion</title>
+    <script type = "text/javascript" src = "https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="static/styles.css">
+    <title>Simple Diffusion</title>
 </head>
 <body>
 <header>Simple Diffusion</header>
@@ -22,9 +23,17 @@
     <!-- Image is just raw doog loaded -->
 </div>
 
+<h3 id="queue_pos_display">
+    <div id="queue_pos">
+        Position In Queue: Press Generate First!
+    </div>
+    <div id="imageUUID">
+        Image UUID :       Press Generate First!
+    </div>
+</h3>
+
 <div id = 'Load_Image'>
-    <h2>Load Image </h2>
-    <h3 id="queue_pos_display">Position In Queue: <div id="queue_pos">Press Generate! First!</div></h3>
+    <h2>First step: Load Image </h2>
     <!-- Here we load the image somehow -->
     <!-- We either generate from promt, -->
     <!-- or load from a image in server database, -->
@@ -39,21 +48,23 @@
             <input type="text" id="positive_prompt_gen" name="positive_prompt" value="high quality,highres,1girl,cloud, scenery, sunset"><br>
             <label for="negative_prompt_gen">Negative Prompt:</label><br>
             <input type="text" id="negative_prompt_gen" name="negative_prompt" value=""><br><br>
-            <label for="ratio">Width Height Ratio: <p id="ratioDisplay">2</p></label>
-            <input type="range" id="ratio" name="ratio" min="-3" max="3"value = "2" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
+            <label for="ratio">(Width - Height) / 512: <p id="ratioDisplay">2</p></label>
+            <input type="range" id="ratio" name="ratio" min="-2" max="2"value = "1" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
             <label for="sampler_gen">Sampler Method:</label><br>
-            <input type="radio" id="DPM2KA_gen" name="sampler_gen" value="DPM2KA" checked="checked">
+            <input type="radio" id="DPM2KA_gen" name="sampler_gen" value="DPM2 Karras" checked="checked">
             <label for="DPM2KA_gen">Default: DMP2 Karras</label><br>
             <input type="radio" id="Heun_gen" name="sampler_gen" value="Heun">
             <label for="Heun_gen">More Creative: Heun</label><br>
             <input type="radio" id="DDIM_gen" name="sampler_gen" value="DDIM">
             <label for="DDIM_gen">Neural: DDIM</label><br>
-            <input type="radio" id="Eular_a_gen" name="sampler_gen" value="Eular_a">
+            <input type="radio" id="Eular_a_gen" name="sampler_gen" value="Euler a">
             <label for="Eular_a_gen">Something different: Eular Ancestry</label><br>
             <input type="radio" id="LMS_gen" name="sampler_gen" value="LMS">
             <label for="LMS_gen">Stable: LMS</label><br><br>
             <label for="seed_gen">Seed:</label><br>
             <input type="text" id="seed_gen" name="seed" value="-1"><br>
+            <label for="steps_delta_percent">percent off default step number:<br/> (can result in worse result!)<p id="stepDeltaDisplay">0</p></label>
+            <input type="range" id="step_delta" name="steps_delta_percent" min="-100" max="50"value = "0" step='1' oninput="stepDeltaDisplay.innerText = this.value"><br> <br>
             <input type="submit" value="Generate!">
         </fieldset>
     </form>
@@ -62,12 +73,12 @@
             <legend>Method 2: Load a image in server:</legend>
             <label for="load_uuid">Load image UUID:</label><br>
             <input type="text" id="load_uuid" name="load_uuid" value=""><br>
-            <input type="submit" value="Generate!">
+            <input type="submit" value="Load!">
         </fieldset>
     </form>
     <form id="generate_like">
         <fieldset>
-            <legend>Method 3: Generate image using tags from image in server:</legend>
+            <legend>Method 3: Generate an image like a image in server:</legend>
             <label for="like_uuid">Generate use image UUID:</label><br>
             <input type="text" id="like_uuid" name="like_uuid" value=""><br>
             <input type="submit" value="Generate!">
@@ -77,30 +88,48 @@
         <fieldset>
             <legend>Method 4: Upload and load a image from local machine:</legend>
             <label for="myfile">Select a file:</label>
-            <input type="file" id="myfile" name="file"><br><br>
-            <input type="submit" value="Generate!">
+            <input type="file" id="myfile" name="file" accept="image/x-png,image/jpeg"><br><br>
+            <!-- <input type="submit" value="Load!"> -->
+            <div id="progress-wrp">
+                <div class="progress-bar"></div>
+                <div class="status">0%</div>
+            </div>
         </fieldset>
     </form>
 </div>
-
+<br/>
+<br/>
 <div id="Source_Image_View">
     <!-- Here is the image view window -->
     <!-- We will also have a button to download the picture -->
-    <div id="Source_Image">
-        <img src="static/source_image_placeholder.webp" alt="Source Image Here">
-    </div>
+    <img id="Source_Image" src="static/source_image_placeholder.webp" alt="Source Image Here">
 </div>
-
+<br/>
+<br/>
 <div id="Info">
     <!-- Here we will put a button to load related info about the image -->
     <button type="button" id="info_button">Info about Pic Above</button>
+    <pre id="info_display"></pre>
 </div>
-
+<br/>
+<br/>
 <div id = 'Queue_View'>
     <!-- Here is the queue from the server, updated automaticly  -->
-
+    <h3>Server Queue</h3>
+    <button type="button" id="stop_queue">Stop fetching server queue</button>
+    <button type="button" id="start_queue">Start fetching server queue</button>
+    <table>
+        <tr>
+          <th>Postion</th>
+          <th>UUID</th>
+        </tr>
+        <tbody id="queue_content">
+        </tbody>
+      </table>
 </div>
-
+<br/>
+<br/>
+<br/>
 <div id="Process_div">
     <!-- Here we put the prompts for further processing -->
     <!-- Here we put a Button to upscale the Image using SwinIR -->
@@ -121,11 +150,11 @@
             <label for="DDIM_process">Default: Inspired: DDIM</label><br>
             <input type="radio" id="LMS_process" name="sampler_process" value="LMS">
             <label for="LMS_process">Enhance: LMS</label><br>
-            <input type="radio" id="DPM2KAA_process" name="sampler_process" value="DPM2KAA">
+            <input type="radio" id="DPM2KAA_process" name="sampler_process" value="DPM2 a Karras">
             <label for="DPM2KAA_process">Regeneration: DMP2 a Karras</label><br>
             <input type="radio" id="Heun_process" name="sampler_process" value="Heun">
             <label for="Heun_process">Redraw: Heun</label><br>
-            <input type="radio" id="Eular_a_process" name="sampler_process" value="Eular_a">
+            <input type="radio" id="Eular_a_process" name="sampler_process" value="Euler a">
             <label for="Eular_a_process">More Creative: Eular Ancestry</label><br>
             <br>
             <label for="seed_process">Seed:</label><br>
@@ -148,7 +177,76 @@
 
 
 <script type = "text/javascript">
+    var queueFetch;
+    var waitUUID;
+    var imgUUID;
+    var uploadSizeLimit = 50000000;
+
+    // upload function from JohannesAndersson's and Mosh Feu's answer to  https://stackoverflow.com/questions/2320069/jquery-ajax-file-upload
+    var Upload = function (file) {
+        this.file = file;
+    };
+    Upload.prototype.getType = function() {return this.file.type;};
+    Upload.prototype.getSize = function() {return this.file.size;};
+    Upload.prototype.getName = function() {return this.file.name;};
+    Upload.prototype.doUpload = function () {
+        var that = this;
+        var formData = new FormData();
+        // add assoc key values, this will be posts values
+        formData.append("file", this.file, this.getName());
+        formData.append("upload_file", true);
+        $.ajax({
+            type: "POST",
+            url: "upload",
+            xhr: function () {
+                var myXhr = $.ajaxSettings.xhr();
+                if (myXhr.upload) {
+                    myXhr.upload.addEventListener('progress', that.progressHandling, false);
+                }
+                return myXhr;
+            },
+            success: function (data) {
+                // your callback here
+                console.log(data)
+                $("#Source_Image").attr("src",'image/'+data['UUID']);
+                imgUUID = data['UUID'];
+                $('#imageUUID').html("Image UUID :       "+data['UUID']);
+                $('#queue_pos').html("Position In Queue: Loaded Image!");
+                console.log(JSON.stringify(JSON.parse(data['params']), null, 2))
+                $('#info_display').html(JSON.stringify(JSON.parse(data['params']), null, 2));
+            },
+            error: function (error) {
+                // handle error
+                console.log(error)
+                alert("While uploading images, the following error is encountered "+error)
+            },
+            async: true,
+            data: formData,
+            cache: false,
+            contentType: false,
+            processData: false,
+            timeout: 60000
+        });
+    };
+    Upload.prototype.progressHandling = function (event) {
+        var percent = 0;
+        var position = event.loaded || event.position;
+        var total = event.total;
+        var progress_bar_id = "#progress-wrp";
+        if (event.lengthComputable) {
+            percent = Math.ceil(position / total * 100);
+        }
+        // update progressbars classes so it fits your code
+        $(progress_bar_id + " .progress-bar").css("width", +percent + "%");
+        $(progress_bar_id + " .status").text(percent + "%");
+    };
+
+
+
+
     $(document).ready( function () {
+
+        queueFetch = setInterval(queueCheck, 1000);
         // Section for handling loading of image
         $('#generate').on( "submit", function(e){
             console.log('Generating results using');
@@ -159,34 +257,160 @@
             }
             
             var genDic = {
-                Positive:$('#positive_prompt_gen').val(),
-                Negative:$('#negative_prompt_gen').val(),
-                Ratio:$('#ratio').val(),
-                Sampler: sampler_gen,
-                Seed:$('#seed_gen').val()
+                prompt:$('#positive_prompt_gen').val(),
+                negative_prompt:$('#negative_prompt_gen').val(),
+                ratio:$('#ratio').val(),
+                sampler_index: sampler_gen,
+                seed:$('#seed_gen').val(),
+                step_delta:$('#step_delta').val()
             };
             console.log(genDic);
-            $.post("new",genDic, function(data) {
-                console.log("Response: ");
-                console.log(data);
-                $('#queue_pos').html(data['Queue'])
-            }, "json");
+            $.ajax({
+                type: "POST",
+                url: "new",
+                data: JSON.stringify(genDic),
+                success: function(data) {
+                    console.log('Response image UUID:');
+                    console.log(data);
+                    waitUUID = data['UUID']
+                    $('#imageUUID').html("Image UUID :       "+waitUUID);
+                    $('#queue_pos').html("Position In Queue: "+data['Queue']);
+                    $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
+                    $('#Load_Image').hide();    
+                },
+                error:function(error) {
+                    console.log(error.responseJSON);
+                    alert(JSON.stringify(error.responseJSON))
+                },
+                contentType: 'application/json; charset=utf-8',
+                dataType: 'json'
+            });
           e.preventDefault();
         });
 
         $('#load_from_server').on( "submit", function(e){
             console.log('Load image using');
-            var uuidReq = $('#load_uuid').val()
+            var uuidReq = $('#load_uuid').val();
             console.log(uuidReq);
-            $.post("image",{uuid:uuidReq}, function(data) {
-                console.log("Response: ");
+            $("#Source_Image").attr("src",'image/'+uuidReq);
+            imgUUID = uuidReq;
+            $('#imageUUID').html("Image UUID :       "+imgUUID);
+            $('#queue_pos').html("Position In Queue: Loaded Image!");
+            console.log('Getting info about pic above!');
+            $.getJSON( "get_info/"+imgUUID, function( data ) {
                 console.log(data);
-                $('#queue_pos').html(data['Queue'])
-            }, "json");
+                $('#info_display').html(JSON.stringify(data, null, 2)); 
+            }).fail(function(error) {
+                console.log(error.responseJSON);
+                alert(JSON.stringify(error.responseJSON))
+            });
           e.preventDefault();
         });
+
+        $('#generate_like').on( "submit", function(e){
+            console.log('Generate image like');
+            var uuidReq = $('#like_uuid').val();
+            console.log(uuidReq);
+            // $("#Source_Image").attr("src",'image/'+uuidReq);
+            $.getJSON( "new_like/"+uuidReq, function( data ) {
+                console.log('Response image UUID:');
+                console.log(data);
+                waitUUID = data['UUID']
+                $('#imageUUID').html("Image UUID :       "+waitUUID);
+                $('#queue_pos').html("Position In Queue: "+data['Queue']);
+                $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
+                $('#Load_Image').hide();    
+            }).fail(function(error) {
+            console.log(error.responseJSON);
+            alert(JSON.stringify(error.responseJSON))
+            });
+            e.preventDefault();
+        });
+
+        $('#myfile').on( "change", function(e){
+            var file = $('#myfile')[0].files[0];
+            console.log(file)
+            if (file){
+                console.log('Image upload!');
+                var upload = new Upload(file);
+
+                // maby check size or type here with upload.getSize() and upload.getType()
+                console.log('Size: '+upload.getSize())
+                console.log('Type: '+upload.getType())
+                if (upload.getSize() > uploadSizeLimit) {
+                    alert('File too big!')
+                    $("#myfile").replaceWith($("#myfile").val('').clone(true))
+                }else if(upload.getType()=='image/png'||upload.getType()=='image/jpeg'){
+                    // execute upload
+                    upload.doUpload();
+                }else{
+                    alert('Only jpegs and pngs are allowed!')
+                    $("#myfile").replaceWith($("#myfile").val('').clone(true))
+                }
+            }
+            e.preventDefault();
+        });
+
+        $('#stop_queue').click( function(e){
+            console.log('Stop Fetching Queue!');
+            clearInterval(queueFetch);
+            queueFetch = null;
+        });
+
+        $('#start_queue').click( function(e){
+            console.log('Start Fetching Queue!');
+            if (!queueFetch){queueFetch = setInterval(queueCheck, 1000);};
+        });
+
+        $('#info_button').click( function(e){
+            if (imgUUID){
+                console.log('Getting info about pic above!');
+                $.getJSON( "get_info/"+imgUUID, function( data ) {
+                    console.log(data);
+                    $('#info_display').html(JSON.stringify(data, null, 2)); 
+                }).fail(function(error) {
+                    console.log(error.responseJSON);
+                    alert(JSON.stringify(error.responseJSON))
+                });
+            }
+        });
     }
-    ); 
+    );
+    var previous_response_string = ''
+    function queueCheck(){
+        $.getJSON( "get_queue", function( data ) {
+            var currentString = JSON.stringify(data);
+            if (previous_response_string != currentString){
+                console.log('Server Queue changed:');
+                console.log(data);
+                previous_response_string = currentString;
+                $('#queue_content').html('');
+                var counter = 0;
+                var myJobInQueue = false;
+                for (const key in data){
+                    // console.log(key);
+                    // console.log(data[key]);
+                    counter++;
+                    if (key == waitUUID){
+                        myJobInQueue = true;
+                    }
+                    $('#queue_content').append("<tr><th>"+counter+"</th><th>"+key+"</th></tr>")
+                }
+                if (!myJobInQueue && waitUUID){
+                    console.log("My job "+waitUUID+" is porbably done! updating view!")
+                    imgUUID = waitUUID;
+                    waitUUID = '';
+                    $('#queue_pos').html("Position In Queue: Loaded Image!");
+                    $('#imageUUID').html("Image UUID :       "+imgUUID);
+                    $("#Source_Image").attr("src",'image/'+imgUUID); 
+                    $('#Load_Image').show();
+                }
+            };
+        });
+    } 
+    $('#my_album').hide()
+    $('#Process_div').hide()
+    $('#Final_Image_View').hide()
 </script>
 <footer></footer>
 </body>
