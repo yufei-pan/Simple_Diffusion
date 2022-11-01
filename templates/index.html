@@ -48,7 +48,7 @@
             <input type="text" id="positive_prompt_gen" name="positive_prompt" value="high quality,highres,1girl,cloud, scenery, sunset"><br>
             <label for="negative_prompt_gen">Negative Prompt:</label><br>
             <input type="text" id="negative_prompt_gen" name="negative_prompt" value=""><br><br>
-            <label for="ratio">(Width - Height) / 512: <p id="ratioDisplay">2</p></label>
+            <label for="ratio">(Width - Height) / 512: <p id="ratioDisplay">1</p></label>
             <input type="range" id="ratio" name="ratio" min="-2" max="2"value = "1" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
             <label for="sampler_gen">Sampler Method:</label><br>
             <input type="radio" id="DPM2KA_gen" name="sampler_gen" value="DPM2 Karras" checked="checked">
@@ -120,7 +120,7 @@
     <button type="button" id="start_queue">Start fetching server queue</button>
     <table>
         <tr>
-          <th>Postion</th>
+          <th>Position</th>
           <th>UUID</th>
         </tr>
         <tbody id="queue_content">
@@ -277,6 +277,7 @@
                     $('#queue_pos').html("Position In Queue: "+data['Queue']);
                     $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
                     $('#Load_Image').hide();    
+                    $('#info_display').html(''); 
                 },
                 error:function(error) {
                     console.log(error.responseJSON);
@@ -319,7 +320,8 @@
                 $('#imageUUID').html("Image UUID :       "+waitUUID);
                 $('#queue_pos').html("Position In Queue: "+data['Queue']);
                 $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
-                $('#Load_Image').hide();    
+                $('#Load_Image').hide();  
+                $('#info_display').html('');   
             }).fail(function(error) {
             console.log(error.responseJSON);
             alert(JSON.stringify(error.responseJSON))
@@ -393,6 +395,7 @@
                     counter++;
                     if (key == waitUUID){
                         myJobInQueue = true;
+                        $('#queue_pos').html("Position In Queue: "+counter);
                     }
                     $('#queue_content').append("<tr><th>"+counter+"</th><th>"+key+"</th></tr>")
                 }
@@ -404,6 +407,7 @@
                     $('#imageUUID').html("Image UUID :       "+imgUUID);
                     $("#Source_Image").attr("src",'image/'+imgUUID); 
                     $('#Load_Image').show();
+                    
                 }
             };
         });

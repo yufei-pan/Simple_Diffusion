@@ -310,6 +310,7 @@ def allowed_file(filename):
 # called `app` in `main.py`.
 app = Flask(__name__)
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -331,7 +332,7 @@ def get_info(uuid):
 
 @app.route('/get_queue')
 def get_queue():
-    print('get_queue recieved')
+    # print('get_queue recieved')
     return getQueue()
 
 @app.route('/new', methods=['POST'])
@@ -392,7 +393,7 @@ if __name__ == '__main__':
     stop_thread = False
     thread = Thread(target = processor)
     thread.start()
-    app.run(host='127.0.0.1', port=19637, debug=True)
+    app.run(host='192.168.1.69', port=19637, debug=True)
     stop_thread = True
     thread.join()
     print('thread exited!')
