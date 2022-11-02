@@ -46,7 +46,7 @@
             <legend>Method 1: Generate using prompt:</legend>
             <label for="positive_prompt_gen">Positive Prompt:</label><br>
             <input type="text" id="positive_prompt_gen" name="positive_prompt" value="high quality,highres,1girl,cloud, scenery, sunset"><br>
-            <label for="negative_prompt_gen">Negative Prompt:</label><br>
+            <label for="negative_prompt_gen">Negative Prompt: (cancel pre-filled values with 'no negative prompt')</label><br>
             <input type="text" id="negative_prompt_gen" name="negative_prompt" value=""><br><br>
             <label for="ratio">(Width - Height) / 512: <p id="ratioDisplay">1</p></label>
             <input type="range" id="ratio" name="ratio" min="-2" max="2"value = "1" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
@@ -62,7 +62,7 @@
             <input type="radio" id="LMS_gen" name="sampler_gen" value="LMS">
             <label for="LMS_gen">Stable: LMS</label><br><br>
             <label for="seed_gen">Seed:</label><br>
-            <input type="text" id="seed_gen" name="seed" value="-1"><br>
+            <input type="text" id="seed_gen" name="seed" value="-1"><br><br>
             <label for="steps_delta_percent">percent off default step number:<br/> (can result in worse result!)<p id="stepDeltaDisplay">0</p></label>
             <input type="range" id="step_delta" name="steps_delta_percent" min="-100" max="50"value = "0" step='1' oninput="stepDeltaDisplay.innerText = this.value"><br> <br>
             <input type="submit" value="Generate!">
@@ -130,6 +130,15 @@
 <br/>
 <br/>
 <br/>
+<h3 id="queue_pos_display_process">
+    <div id="queue_pos_process">
+        Position In Queue:     Press Generate First!
+    </div>
+    <div id="processUUID">
+        Processed Image UUID : Press Generate First!
+    </div>
+</h3>
+
 <div id="Process_div">
     <!-- Here we put the prompts for further processing -->
     <!-- Here we put a Button to upscale the Image using SwinIR -->
@@ -139,11 +148,11 @@
             <legend>How you want to tweeck the picture:</legend>
             <label for="positive_prompt_process">Positive Prompt:</label><br>
             <input type="text" id="positive_prompt_process" name="positive_prompt" value=""><br>
-            <label for="negative_prompt_process">Negative Prompt:</label><br>
+            <label for="negative_prompt_process">Negative Prompt: (cancel pre-filled values with 'no negative prompt')</label><br>
             <input type="text" id="negative_prompt_process" name="negative_prompt" value=""><br>
             <br>
-            <label for="denoise_strength">Creativity Delta: <p id="denoiseDisplay">0</p></label>
-            <input type="range" id="denoise_strength" name="denoise_strength" min="-69" max="69"value = "0" step='1' oninput="denoiseDisplay.innerText = this.value"><br>
+            <label for="denoise_strength_delta">Creativity Delta: <p id="denoiseDisplay">0</p></label>
+            <input type="range" id="denoise_strength_delta" name="denoise_strength_delta" min="-69" max="69"value = "0" step='1' oninput="denoiseDisplay.innerText = this.value"><br>
             <br>
             <label for="sampler_process">Sampler Method:</label><br>
             <input type="radio" id="DDIM_process" name="sampler_process" value="DDIM" checked="checked">
@@ -159,6 +168,8 @@
             <br>
             <label for="seed_process">Seed:</label><br>
             <input type="text" id="seed_process" name="seed" value="-1"><br>
+            <label for="steps_delta_percent_process">percent off default step number:<br/> (can result in worse result!)<p id="stepDeltaDisplayProcess">0</p></label>
+            <input type="range" id="step_delta_process" name="steps_delta_percent_process" min="-100" max="50"value = "0" step='1' oninput="stepDeltaDisplayProcess.innerText = this.value"><br> <br>
             <input type="submit" value="Generate!">
         </fieldset>
     </form>
@@ -170,7 +181,7 @@
     <!-- Also a button to send to original image view -->
     <!-- This is done by simpily remove image from here, add image to above -->
     <!-- Importantly, the hidden ID for the image in source will be the UUID of pic -->
-    <img alt="The generated image will be here"><br>
+    <img id="Processed_Image" alt="The generated image will be here"><br>
     <button type="button" id="Download">Download</button>   
     <button type="button" id="send_to_process">Send to Process again</button>
 </div>
@@ -180,6 +191,9 @@
     var queueFetch;
     var waitUUID;
     var imgUUID;
+    var waitProcessUUID;
+    var processedUUID;
+    var imgParams;
     var uploadSizeLimit = 50000000;
 
     // upload function from JohannesAndersson's and Mosh Feu's answer to  https://stackoverflow.com/questions/2320069/jquery-ajax-file-upload
@@ -207,13 +221,14 @@
             },
             success: function (data) {
                 // your callback here
-                console.log(data)
                 $("#Source_Image").attr("src",'image/'+data['UUID']);
                 imgUUID = data['UUID'];
                 $('#imageUUID').html("Image UUID :       "+data['UUID']);
                 $('#queue_pos').html("Position In Queue: Loaded Image!");
-                console.log(JSON.stringify(JSON.parse(data['params']), null, 2))
-                $('#info_display').html(JSON.stringify(JSON.parse(data['params']), null, 2));
+                imgParams = JSON.parse(data['params']);
+                updateInfo();
+                $('#Process_div').show(); 
+                $('#queue_pos_display_process').show()
             },
             error: function (error) {
                 // handle error
@@ -247,6 +262,9 @@
     $(document).ready( function () {
 
         queueFetch = setInterval(queueCheck, 1000);
+        $('#Process_div').hide(); 
+        $('#Final_Image_View').hide()
+        $('#queue_pos_display_process').hide()
         // Section for handling loading of image
         $('#generate').on( "submit", function(e){
             console.log('Generating results using');
@@ -276,7 +294,8 @@
                     $('#imageUUID').html("Image UUID :       "+waitUUID);
                     $('#queue_pos').html("Position In Queue: "+data['Queue']);
                     $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
-                    $('#Load_Image').hide();    
+                    $('#Load_Image').hide();   
+                    $('#Process_div').hide();     
                     $('#info_display').html(''); 
                 },
                 error:function(error) {
@@ -299,8 +318,10 @@
             $('#queue_pos').html("Position In Queue: Loaded Image!");
             console.log('Getting info about pic above!');
             $.getJSON( "get_info/"+imgUUID, function( data ) {
-                console.log(data);
-                $('#info_display').html(JSON.stringify(data, null, 2)); 
+                imgParams = data;
+                updateInfo();
+                $('#Process_div').show(); 
+                $('#queue_pos_display_process').show()
             }).fail(function(error) {
                 console.log(error.responseJSON);
                 alert(JSON.stringify(error.responseJSON))
@@ -321,6 +342,7 @@
                 $('#queue_pos').html("Position In Queue: "+data['Queue']);
                 $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
                 $('#Load_Image').hide();  
+                $('#Process_div').hide();    
                 $('#info_display').html('');   
             }).fail(function(error) {
             console.log(error.responseJSON);
@@ -368,16 +390,75 @@
             if (imgUUID){
                 console.log('Getting info about pic above!');
                 $.getJSON( "get_info/"+imgUUID, function( data ) {
-                    console.log(data);
-                    $('#info_display').html(JSON.stringify(data, null, 2)); 
+                    imgParams = data;
+                    updateInfo();
                 }).fail(function(error) {
                     console.log(error.responseJSON);
                     alert(JSON.stringify(error.responseJSON))
                 });
             }
         });
+
+        $('#process').on( "submit", function(e){
+            console.log('Processing results using');
+            var ele = document.getElementsByName('sampler_process');
+            for(i = 0; i < ele.length; i++) {
+                if(ele[i].checked)
+                sampler_process = ele[i].value;
+            }
+            
+            var processDic = {
+                prompt:$('#positive_prompt_process').val(),
+                negative_prompt:$('#negative_prompt_process').val(),
+                denoise_strength_delta:$('#denoise_strength_delta').val(),
+                sampler_index: sampler_process,
+                seed:$('#seed_process').val(),
+                step_delta:$('#step_delta_process').val(),
+                source_uuid:imgUUID
+            };
+            console.log(processDic);
+            $.ajax({
+                type: "POST",
+                url: "diffuse",
+                data: JSON.stringify(processDic),
+                success: function(data) {
+                    console.log('Response image UUID:');
+                    console.log(data);
+                    waitProcessUUID = data['UUID']
+                    $('#processUUID').html("Processed Image UUID : "+waitProcessUUID);
+                    $('#queue_pos_process').html("Position In Queue:     "+data['Queue']);
+                    $("#Processed_Image").attr("src",'static/please_wait_until_your_image.webp');   
+                    $('#Process_div').hide();    
+                    $('#info_display').html(''); 
+                },
+                error:function(error) {
+                    console.log(error.responseJSON);
+                    alert(JSON.stringify(error.responseJSON))
+                },
+                contentType: 'application/json; charset=utf-8',
+                dataType: 'json'
+            });
+          e.preventDefault();
+        });
+
+
+
+    });
+
+    function updateInfo(){
+        console.log(JSON.stringify(imgParams, null, 2));
+        $('#info_display').html(JSON.stringify(imgParams, null, 2));
+        if (!$.isEmptyObject(imgParams)){
+            if ('prompt' in imgParams){
+                $('#positive_prompt_process').val(imgParams['prompt']);
+            };
+            if ('negative_prompt' in imgParams && imgParams['negative_prompt'] != 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'){
+                $('#positive_prompt_process').val(imgParams['negative_prompt']);
+            };
+            
+        }
     }
-    );
+
     var previous_response_string = ''
     function queueCheck(){
         $.getJSON( "get_queue", function( data ) {
@@ -389,6 +470,7 @@
                 $('#queue_content').html('');
                 var counter = 0;
                 var myJobInQueue = false;
+                var processJobInQueue = false;
                 for (const key in data){
                     // console.log(key);
                     // console.log(data[key]);
@@ -397,24 +479,45 @@
                         myJobInQueue = true;
                         $('#queue_pos').html("Position In Queue: "+counter);
                     }
+                    if (key == waitProcessUUID){
+                        processJobInQueue = true;
+                        $('#queue_pos_process').html("Position In Queue:     "+counter);
+                    }
                     $('#queue_content').append("<tr><th>"+counter+"</th><th>"+key+"</th></tr>")
                 }
                 if (!myJobInQueue && waitUUID){
                     console.log("My job "+waitUUID+" is porbably done! updating view!")
                     imgUUID = waitUUID;
                     waitUUID = '';
+                    $.getJSON( "get_info/"+imgUUID, function( infodata ) {
+                        imgParams = infodata;
+                        updateInfo();
+                    }).fail(function(error) {
+                        console.log(error.responseJSON);
+                        alert(JSON.stringify(error.responseJSON))
+                    });
                     $('#queue_pos').html("Position In Queue: Loaded Image!");
                     $('#imageUUID').html("Image UUID :       "+imgUUID);
                     $("#Source_Image").attr("src",'image/'+imgUUID); 
                     $('#Load_Image').show();
-                    
+                    $('#Process_div').show(); 
+                    $('#queue_pos_display_process').show()
+                }
+                if (!processJobInQueue && waitProcessUUID){
+                    console.log("Process job "+waitProcessUUID+" is porbably done! updating view!")
+                    processedUUID = waitProcessUUID;
+                    waitProcessUUID = '';
+                    $('#queue_pos_process').html("Position In Queue:     Loaded Image!");
+                    $('#processUUID').html("Processed Image UUID : "+processedUUID);
+                    $("#Processed_Image").attr("src",'image/'+processedUUID); 
+                    $('#Load_Image').show();
+                    $('#Process_div').show(); 
+                    $('#Final_Image_View').show()
                 }
             };
         });
     } 
     $('#my_album').hide()
-    $('#Process_div').hide()
-    $('#Final_Image_View').hide()
 </script>
 <footer></footer>
 </body>

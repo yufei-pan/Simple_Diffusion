@@ -6,7 +6,7 @@ from PIL import Image,PngImagePlugin
 from threading import Thread
 
 
-url = "http://127.0.0.1:7861"
+url = "http://waifuapi.zopyr.us"
 
 
 # now we try to read the db stored
@@ -14,6 +14,8 @@ url = "http://127.0.0.1:7861"
 imageDic = {}
 # NOTE: as python 3.7 and later preserve dictonary order, use a dictionary for ordered queue
 queue = {}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
 with open('images.tsv', mode ='r',encoding='utf8')as file:
     line = file.readline()
     assert line.strip().startswith('UUID\tparameters'), "Data format error!"
@@ -133,25 +135,61 @@ def processor():
         if len(queue) > 0:
             UUID = next(iter(queue))
             print('Job Aquired! Handling '+ UUID)
-            res = requests.post(url+'/sdapi/v1/txt2img', json = queue[UUID])
-            while not res.status_code == 200:
-                print('Error in stable diffusion webui api side! retrying....')
+            if 'path' not in queue[UUID]:
                 res = requests.post(url+'/sdapi/v1/txt2img', json = queue[UUID])
-            img = res.json()["images"][0]
-            info = json.loads(res.json()["info"])
-            info['parameters'] = info['infotexts'][0].strip('\'')
-            del info['infotexts']
-            if img.startswith("data:image/png;base64,"):
-                img = img[len("data:image/png;base64,"):]
-            img = base64.decodebytes(img.encode())
-            img = Image.open(io.BytesIO(img))
-            if imageIsBlack(img):
-                print('Black Image detected! Resampling!')
-                continue
+                while not res.status_code == 200:
+                    print('Error in stable diffusion webui api side! retrying....')
+                    res = requests.post(url+'/sdapi/v1/txt2img', json = queue[UUID])
+                img = res.json()["images"][0]
+                info = json.loads(res.json()["info"])
+                info['parameters'] = info['infotexts'][0].strip('\'')
+                del info['infotexts']
+                if img.startswith("data:image/png;base64,"):
+                    img = img[len("data:image/png;base64,"):]
+                img = base64.decodebytes(img.encode())
+                img = Image.open(io.BytesIO(img))
+                if imageIsBlack(img):
+                    print('Black Image detected! Resampling!')
+                    continue
+                else:
+                    del queue[UUID]
+                storeImg(img,info,UUID)
+                print('Job finished '+ UUID)
             else:
-                del queue[UUID]
-            storeImg(img,info,UUID)
-            print('Job finished '+ UUID)
+                path = queue[UUID].pop('path')
+                # we have a source image path, now we encode it into base64, calculate the height and width, send the queue to the server.
+                # with open(path, "rb") as image_file:
+                #     bs64_str = base64.b64encode(image_file.read())
+                # decoded_string =io.BytesIO(base64.b64decode(bs64_str))
+                pilImage = Image.open(path,mode='r') 
+                # now we have to 
+
+                buffered = io.BytesIO()
+                pilImage.save(buffered, format="PNG")
+                payload = base64.b64encode(buffered.getvalue()).decode()
+                payload = 'data:image/png;base64,'+payload
+                # now we have to transmit this
+                queue[UUID]['init_images'] = [payload]
+
+                res = requests.post(url+'/sdapi/v1/img2img', json = queue[UUID])
+                while not res.status_code == 200:
+                    print('Error in stable diffusion webui api side! retrying....')
+                    res = requests.post(url+'/sdapi/v1/img2img', json = queue[UUID])
+                img = res.json()["images"][0]
+                info = json.loads(res.json()["info"])
+                info['parameters'] = info['infotexts'][0].strip('\'')
+                del info['infotexts']
+                if img.startswith("data:image/png;base64,"):
+                    img = img[len("data:image/png;base64,"):]
+                img = base64.decodebytes(img.encode())
+                img = Image.open(io.BytesIO(img))
+                if imageIsBlack(img):
+                    print('Black Image detected! Resampling!')
+                    continue
+                else:
+                    del queue[UUID]
+                storeImg(img,info,UUID)
+                print('Job finished '+ UUID)
         time.sleep(1)
 
 
@@ -288,14 +326,153 @@ def newImage(args):
     
 
 def diffuseImage(args):
-    print("Generating Image"+args.UUID+" using")
-    print(args)
-    pass
+    if 'source_uuid' not in args:
+        print('Wrong source pic!',args)
+        resp = jsonify({'error' : 'Please include the source image UUID in the request'})
+        resp.status_code = 400
+        return resp
+    path = findFileFromUUID(args['source_uuid'])
+    if path == '':
+        print('File with UUID of '+ args['source_uuid']+ " is not found!")
+        resp = jsonify({'error' : 'Source file not found!'})
+        resp.status_code = 400
+        return resp
+    # print(args)
+    try:
+        params = dict(args)
+        params['path'] = path
+        del params['source_uuid']
+        if 'sampler_index' not in params:
+            params["sampler_index"] = 'DDIM'
+
+        if "cfg_scale" not in params:
+            params["cfg_scale"] = 11
+        else:
+            params["cfg_scale"] = float(params["cfg_scale"])
+
+        if "seed" not in params:
+            params["seed"] = -1
+        else:
+            params["seed"] = int(params["seed"])
+
+        if 'negative_prompt' not in params:
+            params['negative_prompt'] = 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
+        elif params['negative_prompt'] == 'no negative prompt':
+            params['negative_prompt'] = ''
+        else:
+            params['negative_prompt'] += 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
+        
+        if 'steps' not in params:
+            if params["sampler_index"] == 'DPM2 Karras':
+                params['steps'] = 32
+            elif params["sampler_index"] == 'Euler a':
+                params['steps'] = 38
+            elif params["sampler_index"] == 'Euler':
+                params['steps'] = 38
+            elif params["sampler_index"] == 'LMS':
+                params['steps'] = 65
+            elif params["sampler_index"] == 'Heun':
+                params['steps'] = 38
+            elif params["sampler_index"] == 'DPM2':
+                params['steps'] = 32
+            elif params["sampler_index"] == 'DPM2 a':
+                params['steps'] = 32
+            elif params["sampler_index"] == 'DPM fast':
+                params['steps'] = 50
+            elif params["sampler_index"] == 'DPM adaptive':
+                params['steps'] = 32
+            elif params["sampler_index"] == 'LMS Karras':
+                params['steps'] = 60
+            elif params["sampler_index"] == 'DPM2 a Karras':
+                params['steps'] = 32
+            elif params["sampler_index"] == 'DDIM':
+                params['steps'] = 70
+            else:
+                params['steps'] = 35
+        else:
+            params["steps"] = int(params["steps"])
+            if params['steps'] > 50:
+                params['steps'] = 50
+
+        if 'denoising_strength' not in params:
+            if params["sampler_index"] == 'DPM2 Karras':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'Euler a':
+                params['denoising_strength'] = 0.6
+            elif params["sampler_index"] == 'Euler':
+                params['denoising_strength'] = 0.6
+            elif params["sampler_index"] == 'LMS':
+                params['denoising_strength'] = 0.75
+            elif params["sampler_index"] == 'Heun':
+                params['denoising_strength'] = 0.6
+            elif params["sampler_index"] == 'DPM2':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'DPM2 a':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'DPM fast':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'DPM adaptive':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'LMS Karras':
+                params['denoising_strength'] = 0.8
+            elif params["sampler_index"] == 'DPM2 a Karras':
+                params['denoising_strength'] = 0.7
+            elif params["sampler_index"] == 'DDIM':
+                params['denoising_strength'] = 0.75
+            else:
+                params['denoising_strength'] = 0.7
+        else:
+            params["denoising_strength"] = float(params["denoising_strength"])
+
+
+        if 'denoise_strength_delta' in params:
+            params['denoise_strength_delta'] = int(params['denoise_strength_delta'])
+            params['denoising_strength'] = params['denoising_strength'] + (params['denoise_strength_delta'] / 100)
+            if params['denoise_strength_delta'] > 50:
+                params['denoise_strength_delta'] = 50
+            elif params['denoise_strength_delta'] < -100:
+                params['denoise_strength_delta'] = -100
+            params["steps"] += int(params["steps"] * params['denoise_strength_delta'] / 100.0)
+
+        if 'step_delta' in params:
+            params['step_delta'] = int(params['step_delta'])
+            if params['step_delta'] > 50:
+                params['step_delta'] = 50
+            elif params['step_delta'] < -100:
+                params['step_delta'] = -100
+            params["steps"] += int(params["steps"] * params['step_delta'] / 100.0)
+            if params["steps"] < 1:
+                params["steps"] = 1
+            if params['denoising_strength'] > 1.0:
+                params['denoising_strength'] = 1.0
+            if params['denoising_strength'] < 0.1:
+                params['denoising_strength'] = 0.1
+            del params['step_delta']
+            del params['denoise_strength_delta']
+
+        params['width'] = 512
+        params['height'] = 512
+        if 'ratio' in params:
+            params['ratio'] = int(params['ratio'])
+            if params['ratio']> 0:
+                params['width'] += params['ratio'] * 512
+            else:
+                params['height'] += (-params['ratio']) * 512
+            del params['ratio']
+        print("Generating a Image using")
+        print(params)
+        return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
+    except:
+        print('Wrong json!',args)
+        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+        resp.status_code = 400
+        return resp
+    
 
 def getQueue():
     return json.dumps(queue)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -347,8 +524,13 @@ def new_image():
 
 @app.route('/diffuse', methods=['POST'])
 def diffuse():
-    print(request.form)
-    return diffuseImage(request.form)
+    content_type = request.headers.get('Content-Type')
+    if content_type.startswith('application/json'):
+        return diffuseImage(request.json)
+    else:
+        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+        resp.status_code = 400
+        return resp
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -393,7 +575,7 @@ if __name__ == '__main__':
     stop_thread = False
     thread = Thread(target = processor)
     thread.start()
-    app.run(host='192.168.1.69', port=19637, debug=True)
+    app.run(host='0.0.0.0', port=19637, debug=True)
     stop_thread = True
     thread.join()
     print('thread exited!')
