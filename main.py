@@ -2,7 +2,7 @@
 from xml.dom.pulldom import parseString
 from flask import Flask, flash, redirect, render_template, send_file,request, session, abort, escape,jsonify
 import os , requests, json, datetime, uuid,base64 , time,signal,io
-from PIL import Image,PngImagePlugin
+from PIL import Image,PngImagePlugin, ImageOps
 from threading import Thread
 
 
@@ -14,13 +14,14 @@ url = "http://waifuapi.zopyr.us"
 imageDic = {}
 # NOTE: as python 3.7 and later preserve dictonary order, use a dictionary for ordered queue
 queue = {}
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'pjp','jpg', 'jpeg', 'pjpeg', 'jfif', 'webp'}
 
 with open('images.tsv', mode ='r',encoding='utf8')as file:
     line = file.readline()
     assert line.strip().startswith('UUID\tparameters'), "Data format error!"
     line = file.readline()
     while line:
+        # here we made sure only the last line with same UUID will have effect.
         cache = line.strip().split('\t')
         imageDic[cache[0]] = json.loads(' '.join(cache[1:]))
         line = file.readline()
@@ -59,7 +60,7 @@ def formDicFromString(inputString):
 
 
 def findFileFromUUID(UUID):
-    fileNames = ['static/'+UUID[:3]+'/'+UUID+'.'+file_extension for file_extension in ALLOWED_EXTENSIONS]
+    fileNames = ['static/images/'+UUID[:3]+'/'+UUID+'.'+file_extension for file_extension in ALLOWED_EXTENSIONS]
     for fileName in fileNames:
         if os.path.isfile(fileName):
             return fileName
@@ -81,12 +82,12 @@ def getImageParamsFromFile(UUID):
 
 def storeImg(img,params,UUID):
     # img need to be a pil object
-    if not os.path.isdir("static/"+UUID[:3]):
-        os.makedirs("static/"+UUID[:3])
+    if not os.path.isdir("static/images/"+UUID[:3]):
+        os.makedirs("static/images/"+UUID[:3])
     pnginfo_data = PngImagePlugin.PngInfo()
     for k, v in params.items():
         pnginfo_data.add_text(k, str(v))
-    img.save("static/"+UUID[:3]+'/'+UUID+'.png', pnginfo=pnginfo_data)
+    img.save("static/images/"+UUID[:3]+'/'+UUID+'.png', pnginfo=pnginfo_data)
     params['denoising_strength'] = params['denoising_strength'] if params['denoising_strength'] else 0.0
     dic = {
         'prompt'            : params['prompt'].strip(', \n'),
@@ -118,12 +119,85 @@ sample_params = {
     }
 
 def generateImage(params):
-    myUUID = str(uuid.uuid4())
+    # Downsteam already ensured overwrite capability, Thus just need to return the same uuid.
+    myUUID = params.pop('replace_uuid') if 'replace_uuid' in params else str(uuid.uuid4())
     queue[myUUID] = params
     return myUUID
 
+def resizeImageFastTo512KeepRatioMinimizeError(pilImage):
+    width , height = pilImage.size
+    # find the best new width and height to minimize error
+    ratio = width / height
+    new_height = 512
+    new_width = new_height
+    while True:
+        error = abs((new_width / new_height) - ratio)
+        if error > abs(((new_width +64) / new_height) - ratio):
+            new_width = new_width + 64
+        elif error > abs((new_width  / (new_height+64)) - ratio):
+            new_height = new_height + 64
+        else:
+            # error is minimized
+            break
+    width_scale = width / new_width
+    height_scale = height / new_height
+    if width_scale > height_scale:
+        # we scale with the height scale and crop the width
+        cropped_width = int(height_scale * new_width)
+        left_crop = (width - cropped_width) //2
+        right_crop = width - cropped_width - left_crop
+        pilImage = pilImage.crop((left_crop,0,width-right_crop,height))
+    else:
+        # we scale with the width scale and crop the height
+        cropped_height = int(width_scale * new_height)
+        top_crop = (height - cropped_height) //2
+        bottom_crop = height - cropped_height - top_crop
+        pilImage = pilImage.crop((0,top_crop,width,height-bottom_crop))
+    # resizing the image for stable diffusion
+    if width > 512 and height > 512:
+        pilImage = pilImage.resize((new_width,new_height), resample=Image.Resampling.HAMMING)
+    
+    return (pilImage,new_width,new_height)
+
 def imageIsBlack(img):
     return not img.getbbox()
+
+def retreiveImageFromUpstreamAndStore(UUID,taskType,retry_counter):
+    res = requests.post(url+'/sdapi/v1/'+taskType, json = queue[UUID])
+    while not res.status_code == 200:
+        if retry_counter < 10:
+            print('Error in stable diffusion webui api side! retrying....')
+            retry_counter = retry_counter +1
+            queue[UUID]["steps"] = int(queue[UUID]["steps"] * 0.95)
+            res = requests.post(url+'/sdapi/v1/'+taskType, json = queue[UUID])
+        else:
+            # This indicated catastrophic failure at stable diffusion
+            import shutil
+            shutil.copyfile('static/GENERATION_ERROR.webp',"static/images/"+UUID[:3]+'/'+UUID+'.webp')
+            with open('images.tsv', mode ='a',encoding='utf8')as file:
+                file.write(UUID+'\t\{\}\n')
+            imageDic[UUID] = {}
+            del queue[UUID]
+            print('Job ERRORED! '+ UUID)
+
+    img = res.json()["images"][0]
+    info = json.loads(res.json()["info"])
+    info['parameters'] = info['infotexts'][0].strip('\'')
+    del info['infotexts']
+    if img.startswith("data:image/png;base64,"):
+        img = img[len("data:image/png;base64,"):]
+    img = base64.decodebytes(img.encode())
+    img = Image.open(io.BytesIO(img))
+    if imageIsBlack(img):
+        print('Black Image detected! Resampling!')
+        if 'denoising_strength' in queue[UUID] and queue[UUID]['denoising_strength'] > 0.1:
+            queue[UUID]['denoising_strength'] = queue[UUID]['denoising_strength'] -0.03
+        retry_counter = retry_counter +1
+        retreiveImageFromUpstreamAndStore(UUID,taskType,retry_counter)
+    else:
+        del queue[UUID]
+        storeImg(img,info,UUID)
+        print('Job finished '+ UUID)
 
 # This is the main thread for processing the queue into images
 def processor():
@@ -135,26 +209,10 @@ def processor():
         if len(queue) > 0:
             UUID = next(iter(queue))
             print('Job Aquired! Handling '+ UUID)
+            print("Generating a Image using")
+            print(queue[UUID])
             if 'path' not in queue[UUID]:
-                res = requests.post(url+'/sdapi/v1/txt2img', json = queue[UUID])
-                while not res.status_code == 200:
-                    print('Error in stable diffusion webui api side! retrying....')
-                    res = requests.post(url+'/sdapi/v1/txt2img', json = queue[UUID])
-                img = res.json()["images"][0]
-                info = json.loads(res.json()["info"])
-                info['parameters'] = info['infotexts'][0].strip('\'')
-                del info['infotexts']
-                if img.startswith("data:image/png;base64,"):
-                    img = img[len("data:image/png;base64,"):]
-                img = base64.decodebytes(img.encode())
-                img = Image.open(io.BytesIO(img))
-                if imageIsBlack(img):
-                    print('Black Image detected! Resampling!')
-                    continue
-                else:
-                    del queue[UUID]
-                storeImg(img,info,UUID)
-                print('Job finished '+ UUID)
+                retreiveImageFromUpstreamAndStore(UUID,'txt2img',0)
             else:
                 path = queue[UUID].pop('path')
                 # we have a source image path, now we encode it into base64, calculate the height and width, send the queue to the server.
@@ -162,34 +220,21 @@ def processor():
                 #     bs64_str = base64.b64encode(image_file.read())
                 # decoded_string =io.BytesIO(base64.b64decode(bs64_str))
                 pilImage = Image.open(path,mode='r') 
-                # now we have to 
-
+                print('Initial size of image: ',pilImage.size)
+                # now we have to change the width and height of it.
+                pilImage,queue[UUID]['width'],queue[UUID]['height'] = resizeImageFastTo512KeepRatioMinimizeError(pilImage)
+                # apply exif rotation if the image was rotated, doing it after resampling to save process time
+                pilImage= ImageOps.exif_transpose(pilImage)
+                print('Transmitting size of image: ',pilImage.size)
+                # output to stable diffusion with png format
                 buffered = io.BytesIO()
                 pilImage.save(buffered, format="PNG")
                 payload = base64.b64encode(buffered.getvalue()).decode()
                 payload = 'data:image/png;base64,'+payload
                 # now we have to transmit this
                 queue[UUID]['init_images'] = [payload]
-
-                res = requests.post(url+'/sdapi/v1/img2img', json = queue[UUID])
-                while not res.status_code == 200:
-                    print('Error in stable diffusion webui api side! retrying....')
-                    res = requests.post(url+'/sdapi/v1/img2img', json = queue[UUID])
-                img = res.json()["images"][0]
-                info = json.loads(res.json()["info"])
-                info['parameters'] = info['infotexts'][0].strip('\'')
-                del info['infotexts']
-                if img.startswith("data:image/png;base64,"):
-                    img = img[len("data:image/png;base64,"):]
-                img = base64.decodebytes(img.encode())
-                img = Image.open(io.BytesIO(img))
-                if imageIsBlack(img):
-                    print('Black Image detected! Resampling!')
-                    continue
-                else:
-                    del queue[UUID]
-                storeImg(img,info,UUID)
-                print('Job finished '+ UUID)
+                queue[UUID]['resize_mode'] = 0
+                retreiveImageFromUpstreamAndStore(UUID,'img2img',0)
         time.sleep(1)
 
 
@@ -261,7 +306,9 @@ def newImage(args):
         elif params['negative_prompt'] == 'no negative prompt':
             params['negative_prompt'] = ''
         else:
-            params['negative_prompt'] += 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
+            prefill = {"lowres", "bad anatomy", "bad hands", "text", "error", "missing fingers", "extra digit", "fewer digits", "cropped", "worst quality", "low quality", "normal quality", "jpeg artifacts", "signature", "watermark", "username", "blurry"}
+            params['negative_prompt'] = set(params['negative_prompt'].replace(', ',',').split(',')).union(prefill)
+            params['negative_prompt'] = ','.join(params['negative_prompt'])
         
         if 'steps' not in params:
             if params["sampler_index"] == 'DPM2 Karras':
@@ -315,8 +362,6 @@ def newImage(args):
             else:
                 params['height'] += (-params['ratio']) * 512
             del params['ratio']
-        print("Generating a Image using")
-        print(params)
         return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
     except:
         print('Wrong json!',args)
@@ -360,7 +405,9 @@ def diffuseImage(args):
         elif params['negative_prompt'] == 'no negative prompt':
             params['negative_prompt'] = ''
         else:
-            params['negative_prompt'] += 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
+            prefill = {"lowres", "bad anatomy", "bad hands", "text", "error", "missing fingers", "extra digit", "fewer digits", "cropped", "worst quality", "low quality", "normal quality", "jpeg artifacts", "signature", "watermark", "username", "blurry"}
+            params['negative_prompt'] = set(params['negative_prompt'].replace(', ',',').split(',')).union(prefill)
+            params['negative_prompt'] = ','.join(params['negative_prompt'])
         
         if 'steps' not in params:
             if params["sampler_index"] == 'DPM2 Karras':
@@ -370,7 +417,7 @@ def diffuseImage(args):
             elif params["sampler_index"] == 'Euler':
                 params['steps'] = 38
             elif params["sampler_index"] == 'LMS':
-                params['steps'] = 65
+                params['steps'] = 70
             elif params["sampler_index"] == 'Heun':
                 params['steps'] = 38
             elif params["sampler_index"] == 'DPM2':
@@ -386,7 +433,7 @@ def diffuseImage(args):
             elif params["sampler_index"] == 'DPM2 a Karras':
                 params['steps'] = 32
             elif params["sampler_index"] == 'DDIM':
-                params['steps'] = 70
+                params['steps'] = 65
             else:
                 params['steps'] = 35
         else:
@@ -398,13 +445,13 @@ def diffuseImage(args):
             if params["sampler_index"] == 'DPM2 Karras':
                 params['denoising_strength'] = 0.7
             elif params["sampler_index"] == 'Euler a':
-                params['denoising_strength'] = 0.6
+                params['denoising_strength'] = 0.8
             elif params["sampler_index"] == 'Euler':
                 params['denoising_strength'] = 0.6
             elif params["sampler_index"] == 'LMS':
                 params['denoising_strength'] = 0.75
             elif params["sampler_index"] == 'Heun':
-                params['denoising_strength'] = 0.6
+                params['denoising_strength'] = 0.4
             elif params["sampler_index"] == 'DPM2':
                 params['denoising_strength'] = 0.7
             elif params["sampler_index"] == 'DPM2 a':
@@ -416,7 +463,7 @@ def diffuseImage(args):
             elif params["sampler_index"] == 'LMS Karras':
                 params['denoising_strength'] = 0.8
             elif params["sampler_index"] == 'DPM2 a Karras':
-                params['denoising_strength'] = 0.7
+                params['denoising_strength'] = 0.4
             elif params["sampler_index"] == 'DDIM':
                 params['denoising_strength'] = 0.75
             else:
@@ -427,12 +474,12 @@ def diffuseImage(args):
 
         if 'denoise_strength_delta' in params:
             params['denoise_strength_delta'] = int(params['denoise_strength_delta'])
-            params['denoising_strength'] = params['denoising_strength'] + (params['denoise_strength_delta'] / 100)
+            params['denoising_strength'] = params['denoising_strength'] + (params['denoise_strength_delta'] / 200)
             if params['denoise_strength_delta'] > 50:
                 params['denoise_strength_delta'] = 50
             elif params['denoise_strength_delta'] < -100:
                 params['denoise_strength_delta'] = -100
-            params["steps"] += int(params["steps"] * params['denoise_strength_delta'] / 100.0)
+            params["steps"] += int(params["steps"] * params['denoise_strength_delta'] / 500.0)
 
         if 'step_delta' in params:
             params['step_delta'] = int(params['step_delta'])
@@ -443,8 +490,8 @@ def diffuseImage(args):
             params["steps"] += int(params["steps"] * params['step_delta'] / 100.0)
             if params["steps"] < 1:
                 params["steps"] = 1
-            if params['denoising_strength'] > 1.0:
-                params['denoising_strength'] = 1.0
+            if params['denoising_strength'] > 0.9:
+                params['denoising_strength'] = 0.9
             if params['denoising_strength'] < 0.1:
                 params['denoising_strength'] = 0.1
             del params['step_delta']
@@ -459,8 +506,6 @@ def diffuseImage(args):
             else:
                 params['height'] += (-params['ratio']) * 512
             del params['ratio']
-        print("Generating a Image using")
-        print(params)
         return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
     except:
         print('Wrong json!',args)
@@ -470,7 +515,7 @@ def diffuseImage(args):
     
 
 def getQueue():
-    return json.dumps(queue)
+    return json.dumps(dict(map(lambda key,idx: (key,idx), queue.keys(),range(len(queue)))))
 
 
 
@@ -552,9 +597,9 @@ def upload():
         resp.status_code = 400
         return resp
     myUUID = str(uuid.uuid4())
-    if not os.path.isdir("static/"+myUUID[:3]):
-        os.makedirs("static/"+myUUID[:3])
-    file.save("static/"+myUUID[:3]+'/'+myUUID+'.'+file.filename.rpartition('.')[2])
+    if not os.path.isdir("static/images/"+myUUID[:3]):
+        os.makedirs("static/images/"+myUUID[:3])
+    file.save("static/images/"+myUUID[:3]+'/'+myUUID+'.'+file.filename.rpartition('.')[2])
     print('File saved as '+myUUID)
     params = json.dumps(getImageParamsFromFile(myUUID))
     with open('images.tsv', mode ='a',encoding='utf8')as file:
