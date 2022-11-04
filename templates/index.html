@@ -183,7 +183,10 @@
     <!-- Importantly, the hidden ID for the image in source will be the UUID of pic -->
     <button type="button" id="Discard_and_get_new">No! I don't like it! New One!</button><br><br>
     <img id="Processed_Image" alt="The generated image will be here"><br>
-    <button type="button" id="Download_processed">Download</button>  <br> 
+    <!-- <a id="download_process_link" download> -->
+    <button type="button" id="Download_processed">Download</button>
+    <!-- </a> -->
+    <br> <br>
     <button type="button" id="Send_to_be_processed">I would like this image to be processed</button>
 </div>
 
@@ -424,7 +427,54 @@
             processImage(regen=true)
         });
 
+        $('#Download_processed').click( function(e){
+            console.log('Downloading processed image!');
+            // var link = $("<a href='image/"+processedUUID+" download'></a>");
+            // var link = $("<a download></a>");
+            // // link.attr("herf",'image/'+processedUUID); 
+            // link.attr("herf",'static/no_such_image.webp'); 
+            // $(document).append(link)
+            // link.click();
 
+
+            var link = document.createElement('a');
+            link.href = 'image/'+processedUUID;
+            link.download = '';
+            link.click();
+            link.remove();
+        });
+        $('#Send_to_be_processed').click( function(e){
+            console.log('Send to above');
+            imgUUID = processedUUID;
+            processedUUID = null;
+            $.getJSON( "get_info/"+imgUUID, function( infodata ) {
+                imgParams = infodata;
+                updateInfo();
+            }).fail(function(error) {
+                console.log(error.responseJSON);
+                alert(JSON.stringify(error.responseJSON))
+            });
+            $('#queue_pos').html("Position In Queue: Loaded Image!");
+            $('#imageUUID').html("Image UUID :       "+imgUUID);
+            $("#Source_Image").attr("src",'image/'+imgUUID); 
+            $('#Load_Image').show();
+            $('#Process_div').show(); 
+            $('#queue_pos_display_process').show()
+            console.log('Stop Fetching Queue!');
+            clearInterval(queueFetch);
+            queueFetch = null;
+            $('#server_queue_display').hide()
+
+            $('#queue_pos_process').html("Position In Queue:     Press Generate First!");
+            $('#processUUID').html("Processed Image UUID : Press Generate First!");
+            $("#Processed_Image").attr("src",'static/source_image_placeholder.webp'); 
+            $('#Final_Image_View').hide()
+            $('#Discard_and_get_new').hide()
+            
+            $('#Download_processed').hide()
+            // $('#download_process_link').attr("herf",'image/'+processedUUID);
+            $('#Send_to_be_processed').hide()
+        });
 
 
 
@@ -505,7 +555,9 @@
                     $('#Process_div').show(); 
                     $('#Final_Image_View').show()
                     $('#Discard_and_get_new').show()
+                    
                     $('#Download_processed').show()
+                    // $('#download_process_link').attr("herf",'image/'+processedUUID);
                     $('#Send_to_be_processed').show()
                     console.log('Stop Fetching Queue!');
                     clearInterval(queueFetch);
