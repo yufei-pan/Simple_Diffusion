@@ -15,7 +15,9 @@ imageDic = {}
 # NOTE: as python 3.7 and later preserve dictonary order, use a dictionary for ordered queue
 queue = {}
 ALLOWED_EXTENSIONS = {'png', 'pjp','jpg', 'jpeg', 'pjpeg', 'jfif', 'webp'}
-
+if not os.path.isfile('images.tsv'):
+    with open('images.tsv', mode ='w',encoding='utf8')as file:
+        file.writelines(['UUID\tparameters','\n'])
 with open('images.tsv', mode ='r',encoding='utf8')as file:
     line = file.readline()
     assert line.strip().startswith('UUID\tparameters'), "Data format error!"
@@ -28,7 +30,10 @@ with open('images.tsv', mode ='r',encoding='utf8')as file:
 
 # clean
 del line
-del cache
+try:
+    del cache
+except NameError:
+    print("No content in db!")
 
 
 # Utility Functions
@@ -286,7 +291,7 @@ def getInfo(UUID):
 def newImage(args):
     
     # print(args)
-    try:
+    # try:
         params = dict(args)
         if 'sampler_index' not in params:
             params["sampler_index"] = 'DPM2 Karras'
@@ -356,18 +361,18 @@ def newImage(args):
         params['width'] = 512
         params['height'] = 512
         if 'ratio' in params:
-            params['ratio'] = int(params['ratio'])
+            params['ratio'] = float(params['ratio'])
             if params['ratio']> 0:
-                params['width'] += params['ratio'] * 512
+                params['width']  = params['width'] + params['ratio'] * 512 if params['ratio'] < 3 else params['width'] *3
             else:
-                params['height'] += (-params['ratio']) * 512
+                params['height'] = params['height'] + (-params['ratio']) * 512 if params['ratio'] > -3 else params['height'] *3
             del params['ratio']
         return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
-    except:
-        print('Wrong json!',args)
-        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
-        resp.status_code = 400
-        return resp
+    # except:
+    #     print('Wrong json!',args)
+    #     resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+    #     resp.status_code = 400
+    #     return resp
     
 
 def diffuseImage(args):
@@ -383,7 +388,7 @@ def diffuseImage(args):
         resp.status_code = 400
         return resp
     # print(args)
-    try:
+    # try:
         params = dict(args)
         params['path'] = path
         del params['source_uuid']
@@ -500,18 +505,18 @@ def diffuseImage(args):
         params['width'] = 512
         params['height'] = 512
         if 'ratio' in params:
-            params['ratio'] = int(params['ratio'])
+            params['ratio'] = float(params['ratio'])
             if params['ratio']> 0:
-                params['width'] += params['ratio'] * 512
+                params['width']  = params['width'] + params['ratio'] * 512 if params['ratio'] < 3 else params['width'] *3
             else:
-                params['height'] += (-params['ratio']) * 512
+                params['height'] = params['height'] + (-params['ratio']) * 512 if params['ratio'] > -3 else params['height'] *3
             del params['ratio']
         return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
-    except:
-        print('Wrong json!',args)
-        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
-        resp.status_code = 400
-        return resp
+    # except:
+    #     print('Wrong json!',args)
+    #     resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+    #     resp.status_code = 400
+    #     return resp
     
 
 def getQueue():
