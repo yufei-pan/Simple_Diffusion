@@ -1,7 +1,8 @@
 # !/usr/bin/python3
 from xml.dom.pulldom import parseString
 from flask import Flask, flash, redirect, render_template, send_file,request, session, abort, escape,jsonify
-import os , requests, json, datetime, uuid,base64 , time,signal,io
+import os , requests, json, datetime, uuid,base64 , time,signal,io,shortuuid
+from bidict import bidict
 from PIL import Image,PngImagePlugin, ImageOps
 from threading import Thread
 
@@ -12,6 +13,7 @@ url = "http://waifuapi.zopyr.us"
 # now we try to read the db stored
 # we will store the image data to csv line by line additively
 imageDic = {}
+albumDic = bidict()
 # NOTE: as python 3.7 and later preserve dictonary order, use a dictionary for ordered queue
 queue = {}
 ALLOWED_EXTENSIONS = {'png', 'pjp','jpg', 'jpeg', 'pjpeg', 'jfif', 'webp'}
@@ -28,9 +30,22 @@ with open('images.tsv', mode ='r',encoding='utf8')as file:
         imageDic[cache[0]] = json.loads(' '.join(cache[1:]))
         line = file.readline()
 
+if not os.path.isfile('albums.tsv'):
+    with open('albums.tsv', mode ='w',encoding='utf8')as file:
+        file.writelines(['ShortUUID\tkey','\n'])
+with open('albums.tsv', mode ='r',encoding='utf8')as file:
+    line = file.readline()
+    assert line.strip().startswith('ShortUUID\tkey'), "Data format error!"
+    line = file.readline()
+    while line:
+        # here we made sure only the last line with same UUID will have effect.
+        cache = line.strip().split('\t')
+        albumDic[cache[0]] = cache[1]
+        line = file.readline()
+
 # clean
-del line
 try:
+    del line
     del cache
 except NameError:
     print("No content in db!")
@@ -123,6 +138,24 @@ sample_params = {
         "denoising_strength": 0
     }
 
+def storeAlbum(shortUUID,key,imagesDic):
+    # verification of key and UUID pair
+    if shortUUID in albumDic:
+        if not albumDic[shortUUID] == key:
+            return "Not Authorized!"
+    else:
+        albumDic[shortUUID] = key
+        with open('albums.tsv', mode ='a',encoding='utf8')as file:
+            file.write(shortUUID+'\t'+key+'\n')
+    if not os.path.isdir("static/albums/"+shortUUID[:2]):
+        os.makedirs("static/albums/"+shortUUID[:2])
+
+    with open("static/albums/"+shortUUID[:2]+'/'+shortUUID+'.json', mode ='w',encoding='utf8')as file:
+        json.dump(imagesDic, file)
+    return "Success!"
+
+
+
 def generateImage(params):
     # Downsteam already ensured overwrite capability, Thus just need to return the same uuid.
     myUUID = params.pop('replace_uuid') if 'replace_uuid' in params else str(uuid.uuid4())
@@ -178,7 +211,7 @@ def retreiveImageFromUpstreamAndStore(UUID,taskType,retry_counter):
         else:
             # This indicated catastrophic failure at stable diffusion
             import shutil
-            shutil.copyfile('static/GENERATION_ERROR.webp',"static/images/"+UUID[:3]+'/'+UUID+'.webp')
+            shutil.copy('static/GENERATION_ERROR.webp',"static/images/"+UUID[:3]+'/'+UUID+'.webp')
             with open('images.tsv', mode ='a',encoding='utf8')as file:
                 file.write(UUID+'\t\{\}\n')
             imageDic[UUID] = {}
@@ -389,129 +422,129 @@ def diffuseImage(args):
         return resp
     # print(args)
     # try:
-        params = dict(args)
-        params['path'] = path
-        del params['source_uuid']
-        if 'sampler_index' not in params:
-            params["sampler_index"] = 'DDIM'
+    params = dict(args)
+    params['path'] = path
+    del params['source_uuid']
+    if 'sampler_index' not in params:
+        params["sampler_index"] = 'DDIM'
 
-        if "cfg_scale" not in params:
-            params["cfg_scale"] = 11
+    if "cfg_scale" not in params:
+        params["cfg_scale"] = 11
+    else:
+        params["cfg_scale"] = float(params["cfg_scale"])
+
+    if "seed" not in params:
+        params["seed"] = -1
+    else:
+        params["seed"] = int(params["seed"])
+
+    if 'negative_prompt' not in params:
+        params['negative_prompt'] = 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
+    elif params['negative_prompt'] == 'no negative prompt':
+        params['negative_prompt'] = ''
+    else:
+        prefill = {"lowres", "bad anatomy", "bad hands", "text", "error", "missing fingers", "extra digit", "fewer digits", "cropped", "worst quality", "low quality", "normal quality", "jpeg artifacts", "signature", "watermark", "username", "blurry"}
+        params['negative_prompt'] = set(params['negative_prompt'].replace(', ',',').split(',')).union(prefill)
+        params['negative_prompt'] = ','.join(params['negative_prompt'])
+    
+    if 'steps' not in params:
+        if params["sampler_index"] == 'DPM2 Karras':
+            params['steps'] = 32
+        elif params["sampler_index"] == 'Euler a':
+            params['steps'] = 38
+        elif params["sampler_index"] == 'Euler':
+            params['steps'] = 38
+        elif params["sampler_index"] == 'LMS':
+            params['steps'] = 70
+        elif params["sampler_index"] == 'Heun':
+            params['steps'] = 38
+        elif params["sampler_index"] == 'DPM2':
+            params['steps'] = 32
+        elif params["sampler_index"] == 'DPM2 a':
+            params['steps'] = 32
+        elif params["sampler_index"] == 'DPM fast':
+            params['steps'] = 50
+        elif params["sampler_index"] == 'DPM adaptive':
+            params['steps'] = 32
+        elif params["sampler_index"] == 'LMS Karras':
+            params['steps'] = 60
+        elif params["sampler_index"] == 'DPM2 a Karras':
+            params['steps'] = 32
+        elif params["sampler_index"] == 'DDIM':
+            params['steps'] = 65
         else:
-            params["cfg_scale"] = float(params["cfg_scale"])
+            params['steps'] = 35
+    else:
+        params["steps"] = int(params["steps"])
+        if params['steps'] > 50:
+            params['steps'] = 50
 
-        if "seed" not in params:
-            params["seed"] = -1
+    if 'denoising_strength' not in params:
+        if params["sampler_index"] == 'DPM2 Karras':
+            params['denoising_strength'] = 0.7
+        elif params["sampler_index"] == 'Euler a':
+            params['denoising_strength'] = 0.8
+        elif params["sampler_index"] == 'Euler':
+            params['denoising_strength'] = 0.6
+        elif params["sampler_index"] == 'LMS':
+            params['denoising_strength'] = 0.75
+        elif params["sampler_index"] == 'Heun':
+            params['denoising_strength'] = 0.4
+        elif params["sampler_index"] == 'DPM2':
+            params['denoising_strength'] = 0.7
+        elif params["sampler_index"] == 'DPM2 a':
+            params['denoising_strength'] = 0.7
+        elif params["sampler_index"] == 'DPM fast':
+            params['denoising_strength'] = 0.7
+        elif params["sampler_index"] == 'DPM adaptive':
+            params['denoising_strength'] = 0.7
+        elif params["sampler_index"] == 'LMS Karras':
+            params['denoising_strength'] = 0.8
+        elif params["sampler_index"] == 'DPM2 a Karras':
+            params['denoising_strength'] = 0.4
+        elif params["sampler_index"] == 'DDIM':
+            params['denoising_strength'] = 0.75
         else:
-            params["seed"] = int(params["seed"])
+            params['denoising_strength'] = 0.7
+    else:
+        params["denoising_strength"] = float(params["denoising_strength"])
 
-        if 'negative_prompt' not in params:
-            params['negative_prompt'] = 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry'
-        elif params['negative_prompt'] == 'no negative prompt':
-            params['negative_prompt'] = ''
+
+    if 'denoise_strength_delta' in params:
+        params['denoise_strength_delta'] = int(params['denoise_strength_delta'])
+        params['denoising_strength'] = params['denoising_strength'] + (params['denoise_strength_delta'] / 200)
+        if params['denoise_strength_delta'] > 50:
+            params['denoise_strength_delta'] = 50
+        elif params['denoise_strength_delta'] < -100:
+            params['denoise_strength_delta'] = -100
+        params["steps"] += int(params["steps"] * params['denoise_strength_delta'] / 500.0)
+
+    if 'step_delta' in params:
+        params['step_delta'] = int(params['step_delta'])
+        if params['step_delta'] > 50:
+            params['step_delta'] = 50
+        elif params['step_delta'] < -100:
+            params['step_delta'] = -100
+        params["steps"] += int(params["steps"] * params['step_delta'] / 100.0)
+        if params["steps"] < 1:
+            params["steps"] = 1
+        if params['denoising_strength'] > 0.9:
+            params['denoising_strength'] = 0.9
+        if params['denoising_strength'] < 0.1:
+            params['denoising_strength'] = 0.1
+        del params['step_delta']
+        del params['denoise_strength_delta']
+
+    params['width'] = 512
+    params['height'] = 512
+    if 'ratio' in params:
+        params['ratio'] = float(params['ratio'])
+        if params['ratio']> 0:
+            params['width']  = params['width'] + params['ratio'] * 512 if params['ratio'] < 3 else params['width'] *3
         else:
-            prefill = {"lowres", "bad anatomy", "bad hands", "text", "error", "missing fingers", "extra digit", "fewer digits", "cropped", "worst quality", "low quality", "normal quality", "jpeg artifacts", "signature", "watermark", "username", "blurry"}
-            params['negative_prompt'] = set(params['negative_prompt'].replace(', ',',').split(',')).union(prefill)
-            params['negative_prompt'] = ','.join(params['negative_prompt'])
-        
-        if 'steps' not in params:
-            if params["sampler_index"] == 'DPM2 Karras':
-                params['steps'] = 32
-            elif params["sampler_index"] == 'Euler a':
-                params['steps'] = 38
-            elif params["sampler_index"] == 'Euler':
-                params['steps'] = 38
-            elif params["sampler_index"] == 'LMS':
-                params['steps'] = 70
-            elif params["sampler_index"] == 'Heun':
-                params['steps'] = 38
-            elif params["sampler_index"] == 'DPM2':
-                params['steps'] = 32
-            elif params["sampler_index"] == 'DPM2 a':
-                params['steps'] = 32
-            elif params["sampler_index"] == 'DPM fast':
-                params['steps'] = 50
-            elif params["sampler_index"] == 'DPM adaptive':
-                params['steps'] = 32
-            elif params["sampler_index"] == 'LMS Karras':
-                params['steps'] = 60
-            elif params["sampler_index"] == 'DPM2 a Karras':
-                params['steps'] = 32
-            elif params["sampler_index"] == 'DDIM':
-                params['steps'] = 65
-            else:
-                params['steps'] = 35
-        else:
-            params["steps"] = int(params["steps"])
-            if params['steps'] > 50:
-                params['steps'] = 50
-
-        if 'denoising_strength' not in params:
-            if params["sampler_index"] == 'DPM2 Karras':
-                params['denoising_strength'] = 0.7
-            elif params["sampler_index"] == 'Euler a':
-                params['denoising_strength'] = 0.8
-            elif params["sampler_index"] == 'Euler':
-                params['denoising_strength'] = 0.6
-            elif params["sampler_index"] == 'LMS':
-                params['denoising_strength'] = 0.75
-            elif params["sampler_index"] == 'Heun':
-                params['denoising_strength'] = 0.4
-            elif params["sampler_index"] == 'DPM2':
-                params['denoising_strength'] = 0.7
-            elif params["sampler_index"] == 'DPM2 a':
-                params['denoising_strength'] = 0.7
-            elif params["sampler_index"] == 'DPM fast':
-                params['denoising_strength'] = 0.7
-            elif params["sampler_index"] == 'DPM adaptive':
-                params['denoising_strength'] = 0.7
-            elif params["sampler_index"] == 'LMS Karras':
-                params['denoising_strength'] = 0.8
-            elif params["sampler_index"] == 'DPM2 a Karras':
-                params['denoising_strength'] = 0.4
-            elif params["sampler_index"] == 'DDIM':
-                params['denoising_strength'] = 0.75
-            else:
-                params['denoising_strength'] = 0.7
-        else:
-            params["denoising_strength"] = float(params["denoising_strength"])
-
-
-        if 'denoise_strength_delta' in params:
-            params['denoise_strength_delta'] = int(params['denoise_strength_delta'])
-            params['denoising_strength'] = params['denoising_strength'] + (params['denoise_strength_delta'] / 200)
-            if params['denoise_strength_delta'] > 50:
-                params['denoise_strength_delta'] = 50
-            elif params['denoise_strength_delta'] < -100:
-                params['denoise_strength_delta'] = -100
-            params["steps"] += int(params["steps"] * params['denoise_strength_delta'] / 500.0)
-
-        if 'step_delta' in params:
-            params['step_delta'] = int(params['step_delta'])
-            if params['step_delta'] > 50:
-                params['step_delta'] = 50
-            elif params['step_delta'] < -100:
-                params['step_delta'] = -100
-            params["steps"] += int(params["steps"] * params['step_delta'] / 100.0)
-            if params["steps"] < 1:
-                params["steps"] = 1
-            if params['denoising_strength'] > 0.9:
-                params['denoising_strength'] = 0.9
-            if params['denoising_strength'] < 0.1:
-                params['denoising_strength'] = 0.1
-            del params['step_delta']
-            del params['denoise_strength_delta']
-
-        params['width'] = 512
-        params['height'] = 512
-        if 'ratio' in params:
-            params['ratio'] = float(params['ratio'])
-            if params['ratio']> 0:
-                params['width']  = params['width'] + params['ratio'] * 512 if params['ratio'] < 3 else params['width'] *3
-            else:
-                params['height'] = params['height'] + (-params['ratio']) * 512 if params['ratio'] > -3 else params['height'] *3
-            del params['ratio']
-        return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
+            params['height'] = params['height'] + (-params['ratio']) * 512 if params['ratio'] > -3 else params['height'] *3
+        del params['ratio']
+    return json.dumps({'UUID':generateImage(params),'Queue':len(queue)})
     # except:
     #     print('Wrong json!',args)
     #     resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
@@ -522,7 +555,45 @@ def diffuseImage(args):
 def getQueue():
     return json.dumps(dict(map(lambda key,idx: (key,idx), queue.keys(),range(len(queue)))))
 
+def getAlbumJSON(shortuuid):
+    print("Retreiving Album "+shortuuid+"...")
+    fileName = 'static/albums/'+shortuuid[:2]+'/'+shortuuid+'.json'
+    if not os.path.isfile(fileName):
+        print('File with UUID of '+ fileName+ " is not found!")
+        resp = jsonify({'error' : 'File with UUID of '+ shortuuid+ " is not found!"})
+        resp.status_code = 400
+        return resp
+    print(fileName)
+    return send_file(fileName)
 
+def newAlbum(args):
+    shortUUID = shortuuid.uuid()[:8]
+
+    while shortUUID in albumDic:
+        shortUUID = shortuuid.uuid()[:8]
+    key = str(uuid.uuid4())
+    params = dict(args)
+    params["ID"] = shortUUID
+    storeAlbum(shortUUID,key,params)
+    return json.dumps({"ID":shortUUID,"key":key})
+
+def saveAlbum(args):
+    if args['ID'] in albumDic:
+        # we are replacing
+        if not 'key' in args:
+            resp = jsonify({'error' : 'Such Album exist and you do not have the right to access it! Please transmit a proper key with it!'})
+            resp.status_code = 400
+            return resp
+        if not args['key'] == albumDic[args['ID']]:
+            resp = jsonify({'error' : 'Your Key is wrong for this album!'})
+            resp.status_code = 400
+            return resp
+        params = dict(args)
+        del params['key']
+        storeAlbum(args['ID'],args['key'],params)
+        return json.dumps({"ID":args['ID'],"key":args['key']})
+    else:
+        return newAlbum(args)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -547,6 +618,11 @@ def get_image(uuid):
     print(uuid)
     return getImage(uuid)
 
+@app.route('/album_json/<string:shortuuid>')
+def get_Album_JSON(shortuuid):
+    print(shortuuid)
+    return getAlbumJSON(shortuuid)
+
 @app.route('/new_like/<string:uuid>')
 def new_like(uuid):
     print(uuid)
@@ -556,6 +632,15 @@ def new_like(uuid):
 def get_info(uuid):
     print(uuid)
     return getInfo(uuid)
+
+@app.route('/get_album_id/<string:key>')
+def get_album_id(key):
+    if key in albumDic.inverse:
+        return json.dumps({'ID':albumDic.inverse[key]})
+    else:
+        resp = jsonify({'error' : 'Key not found or not legal!, Please make sure you used the EDIT key not the ACCESS key!'})
+        resp.status_code = 400
+        return resp
 
 @app.route('/get_queue')
 def get_queue():
@@ -614,8 +699,34 @@ def upload():
     resp.status_code = 201
     return resp
 
+@app.route('/new_album', methods=['POST'])
+def new_album():
+    content_type = request.headers.get('Content-Type')
+    if content_type.startswith('application/json'):
+        return newAlbum(request.json)
+    else:
+        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+        resp.status_code = 400
+        return resp
 
+@app.route('/save_album', methods=['POST'])
+def save_album():
+    content_type = request.headers.get('Content-Type')
+    if content_type.startswith('application/json'):
+        return saveAlbum(request.json)
+    else:
+        resp = jsonify({'error' : 'Please transmit a compatible json Dictionary'})
+        resp.status_code = 400
+        return resp
 
+# @app.route('/album/<string:shortuuid>')
+# def album_with_ID(shortuuid):
+#     return render_template('album.html',shortuuid)
+
+@app.route('/album/')
+@app.route('/album/<string:shortuuid>')
+def album(shortuuid=None):
+    return render_template('album.html',shortuuid=shortuuid)
 
 
 if __name__ == '__main__':

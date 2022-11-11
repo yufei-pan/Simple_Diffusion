@@ -25,3 +25,12 @@
     display: inline-block;
     color: #000000;
   }
+
+  img {
+    max-width: 100%;
+  }
+
+  .info {
+    width:100%;
+    overflow:auto
+  }
