@@ -124,7 +124,10 @@ Album Description:<br>
         console.log('The album requested is:');
         console.log(data);
         workingAlbum = data;
-        workingAlbum.key = myAlbums.get(id).key
+        if (myAlbums.has(id)){
+            workingAlbum.key = myAlbums.get(id).key
+        }
+        
         localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
         $('#album_name').html('Viewing Album '+id);
         if ("nickname" in data){

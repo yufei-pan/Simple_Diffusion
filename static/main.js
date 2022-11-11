@@ -337,10 +337,12 @@ $(document).ready( function () {
 
     myAlbums.forEach (function(data, ID) {
         // <option value="volvo">Volvo</option>
-        if (!data.name){
-            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'))
+        if (data.nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+data.nickname+'</option>'))
+        }else if(JSON.parse(localStorage.getItem(ID)).nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+JSON.parse(localStorage.getItem(ID)).nickname+'</option>'))
         }else{
-            $('#album_key').append($('<option value="'+ID+'">'+data.name+'</option>'))
+            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'))
         }
     })
     
