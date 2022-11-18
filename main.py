@@ -301,6 +301,8 @@ def newLike(UUID):
         return resp
     justLikeDic = imageDic[UUID].copy()
     justLikeDic['seed'] = -1
+    if "original_file_name" in justLikeDic:
+        del justLikeDic["original_file_name"]
     # res = requests.post(url+'/sdapi/v1/txt2img', json = justLikeDic)
     return json.dumps({'UUID':generateImage(justLikeDic),'Queue':len(queue)})
 
@@ -691,7 +693,9 @@ def upload():
         os.makedirs("static/images/"+myUUID[:3])
     file.save("static/images/"+myUUID[:3]+'/'+myUUID+'.'+file.filename.rpartition('.')[2])
     print('File saved as '+myUUID)
-    params = json.dumps(getImageParamsFromFile(myUUID))
+    params = getImageParamsFromFile(myUUID)
+    params['original_file_name'] = file.filename
+    params = json.dumps(params)
     with open('images.tsv', mode ='a',encoding='utf8')as file:
         file.write(myUUID+'\t'+params+'\n')
     imageDic[myUUID] = params

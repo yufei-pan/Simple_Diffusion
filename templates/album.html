@@ -159,6 +159,7 @@ function loadAlbum(id){
                     $('#album_description').html(workingAlbum.description);
                 }
                 formGallery();
+                formAlbumList();
             }).fail(function(error) {
                 console.log(error.responseJSON);
                 alert(JSON.stringify(error.responseJSON))

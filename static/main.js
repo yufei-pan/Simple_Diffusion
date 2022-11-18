@@ -80,7 +80,7 @@ Upload.prototype.doUpload = function () {
             console.log(error)
             alert("While uploading images, the following error is encountered "+error)
         },
-        async: true,
+        async: false,
         data: formData,
         cache: false,
         contentType: false,
@@ -175,24 +175,31 @@ $(document).ready( function () {
     });
 
     $('#myfile').on( "change", function(e){
-        var file = $('#myfile')[0].files[0];
-        console.log(file)
-        if (file){
-            console.log('Image upload!');
-            var upload = new Upload(file);
+        myArray = Array.from($('#myfile')[0].files);
+        myArray.sort(function(a,b) {
+            return String.naturalCompare(a.name, b.name)
+        });
+        for (let i = 0; i < myArray.length; i++) {
+            var file = myArray[i];
+            console.log(file)
+            if (file){
+                console.log('Image upload!');
+                var upload = new Upload(file);
 
-            // maby check size or type here with upload.getSize() and upload.getType()
-            console.log('Size: '+upload.getSize())
-            console.log('Type: '+upload.getType())
-            if (upload.getSize() > uploadSizeLimit) {
-                alert('File too big!')
-                $("#myfile").replaceWith($("#myfile").val('').clone(true))
-            }else if(upload.getType()=='image/png'||upload.getType()=='image/jpeg'||upload.getType()=='image/webp'){
-                // execute upload
-                upload.doUpload();
-            }else{
-                alert('Only jpegs, pngs and webps are allowed!')
-                $("#myfile").replaceWith($("#myfile").val('').clone(true))
+                // maby check size or type here with upload.getSize() and upload.getType()
+                console.log('Size: '+upload.getSize())
+                console.log('Type: '+upload.getType())
+                if (upload.getSize() > uploadSizeLimit) {
+                    alert('File too big!')
+                    $("#myfile").replaceWith($("#myfile").val('').clone(true))
+                }else if(upload.getType()=='image/png'||upload.getType()=='image/jpeg'||upload.getType()=='image/webp'){
+                    // execute upload
+                    console.log('uploading image '+ file.name);
+                    upload.doUpload();
+                }else{
+                    alert('Only jpegs, pngs and webps are allowed!')
+                    $("#myfile").replaceWith($("#myfile").val('').clone(true))
+                }
             }
         }
         e.preventDefault();
@@ -342,6 +349,15 @@ $(document).ready( function () {
             dataType: 'json'
         });
     });
+    $('#reverse_album').click( function(e){
+        console.log('reverse album order!')
+        workingAlbum.images.reverse();
+        localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+        formGallery();
+    });
+
+
+
     formAlbumList();
     
     $('#working_album').on( "submit", function(e){
@@ -617,12 +633,15 @@ function formGallery(){
     var cards = $("<div class='cards' id='cards'></dev>");
     remainingCards = []
     for (let idx in workingAlbum.images){
-        let UUID = workingAlbum.images[workingAlbum.images.length-idx-1];
+        let crtIdx = workingAlbum.images.length-idx-1;
+        let UUID = workingAlbum.images[crtIdx];
         //console.log(UUID);
         var card = $("<div class='card' id='"+UUID+"'></div>");
+
         card.append($("<h3>"+UUID+"<h3/>"));
         card.append($("<img loading='lazy' src='image/"+UUID+"'/>"));
         card.append($("<br/>"));
+
         if (!localStorage.getItem(UUID)){
             $.getJSON( "get_info/"+UUID, function( data ) {
                 localStorage.setItem(UUID, JSON.stringify(data));
@@ -631,25 +650,58 @@ function formGallery(){
                 alert(JSON.stringify(error.responseJSON))
             });
         }
-        card.append($('<pre class="info"></pre>').html(JSON.stringify(JSON.parse(localStorage.getItem(UUID)), null, 2)));
+        let info = localStorage.getItem(UUID)
+        if (info != '{}'){
+            card.append($('<pre class="info"></pre>').html(JSON.stringify(JSON.parse(info), null, 2)));
+        }
+        
         var deleteButton = $('<button type="button" >Delete '+UUID+'</button>');
         deleteButton.click(function(){
-            deleteImageFromGallery(workingAlbum.images.length-idx-1,UUID);
+            deleteImageFromGallery(crtIdx,UUID);
         });
         card.append(deleteButton);
         card.append($("<br/>"));
+
         var generateLikeButton = $('<button type="button" >Generate Image Like '+UUID+'</button>');
         generateLikeButton.click(function(){
             generateLike(UUID);
         });
         card.append(generateLikeButton);
         card.append($("<br/>"));
+
         var loadButton = $('<button type="button" >Load Image '+UUID+' for processing</button>');
         loadButton.click(function(){
             loadImage(UUID);
         });
         card.append(loadButton);
         card.append($("<br/>"));
+
+        var moveUpButton = $('<button type="button" >Move Image Up</button>');
+        moveUpButton.click(function(){
+            // we will actually move down as when displaying, the array is reversed
+            if (crtIdx + 1 < workingAlbum.images.length){
+                console.log('Move Image Up');
+                [workingAlbum.images[crtIdx], workingAlbum.images[crtIdx+1]] = [workingAlbum.images[crtIdx+1], workingAlbum.images[crtIdx]]
+                localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+                formGallery();
+            } 
+        });
+        card.append(moveUpButton);
+        card.append($("<br/>"));
+
+        var moveDownButton = $('<button type="button" >Move Image Down</button>');
+        moveDownButton.click(function(){
+            // we will actually move up as when displaying, the array is reversed
+            if (crtIdx - 1 > -1){
+                console.log('Move Image Down');
+                [workingAlbum.images[crtIdx-1], workingAlbum.images[crtIdx]] = [workingAlbum.images[crtIdx], workingAlbum.images[crtIdx-1]]
+                localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+                formGallery();
+            } 
+        });
+        card.append(moveDownButton);
+        card.append($("<br/>"));
+
         remainingCards.push(card);
         count++;
     }
@@ -669,7 +721,7 @@ function formGallery(){
 
 function deleteImageFromGallery(idx,UUID){
     console.log('removing idx '+idx);
-    console.log('remobyving UUID '+UUID);
+    console.log('removing UUID '+UUID);
     workingAlbum.images.splice(idx, 1);
     localStorage.removeItem(UUID);
     localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
