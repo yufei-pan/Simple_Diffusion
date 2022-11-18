@@ -67,94 +67,159 @@ Album Description:<br>
 
 
 <script type = "text/javascript">
-    shortuuid = "{{ shortuuid }}"
+    shortuuid = "{{ shortuuid }}";
+    remainingCards = [];
     console.log(shortuuid)
-    if (shortuuid && shortuuid != 'None'){
-        loadAlbum(shortuuid);
-    }else{
-        var localAlbum = JSON.parse(localStorage.getItem("localAlbum"));
-        if (!localAlbum){localAlbum={ID:'localAlbum',images:[],description:'My Images'}};
-        var workingAlbum = localAlbum
-        if (workingAlbum.description){
-            $('#album_description').html(workingAlbum.description)
-        }
 
-        if (workingAlbum.nickname){
-            $('#nickname').html(workingAlbum.nickname)
-        }
-    }
-
+    var workingAlbum;
+    var localAlbum = JSON.parse(localStorage.getItem("localAlbum"));
+    if (!localAlbum){localAlbum={ID:'localAlbum',images:[],description:'My Images'}};
     var myAlbums = JSON.parse(localStorage.getItem("myAlbums"))
     if (!myAlbums){
-        myAlbums=new Map()
+        myAlbums=new Map(Object.entries({localAlbum:{ID: 'localAlbum', key: 'localAlbum'}}))
     }else{
         myAlbums = new Map(Object.entries(myAlbums));
     }
 
+    var viewAlbums = JSON.parse(localStorage.getItem("viewAlbums"))
+    if (!viewAlbums){
+        viewAlbums=[]
+    }
 
-    
-    myAlbums.forEach (function(data, ID) {
-        // <option value="volvo">Volvo</option>
-        if (!data.name){
-            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'))
-        }else{
-            $('#album_key').append($('<option value="'+ID+'">'+data.name+'</option>'))
-        }
-    })
+
+    if (shortuuid && shortuuid != 'None'){
+        loadAlbum(shortuuid);
+    }else{
+        formAlbumList();
+        workingAlbum = localAlbum
+    }
+
     $(document).ready( function () {
         $('#working_album').on( "submit", function(e){
             if ($('#album_key_in').val()){
-                $.getJSON( "../get_album_id/"+$('#album_key_in').val(), function( id ) {
+                $.getJSON( "../album_id/"+$('#album_key_in').val(), function( id ) {
                     myAlbums.set(id.ID,{'ID':id.ID,'key':$('#album_key_in').val()});
                     localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
-                    loadAlbum(id.ID);
+                    console.log('Loading Album '+id.ID)
+                    //loadAlbum(id.ID);
+                    $(location).attr("href", "id.ID");
                 }).fail(function(error) {
                     console.log(error.responseJSON);
                     alert(JSON.stringify(error.responseJSON));
                 });
             }else{
-                loadAlbum($('#album_key').val());
+                console.log('Loading Album '+$('#album_key').val())
+                //loadAlbum($('#album_key').val());
+                $(location).attr("href", $('#album_key').val());
             }
             e.preventDefault();
         });
+        
+        $('#find_album').on( "submit", function(e){
+            if ($('#album_key_view_in').val()){
+                $(location).attr("href", $('#album_key_view_in').val());
+            }else{
+                console.log('Loading Album '+$('#album_key_view').val())
+                $(location).attr("href", $('#album_key_view').val());
+            }
+            e.preventDefault();
+        });
+
+
     });
 
-    function loadAlbum(id){
-    $.getJSON( "../album_json/"+id, function( data ) {
-        console.log('The album requested is:');
-        console.log(data);
-        workingAlbum = data;
+    $(window).scroll(function () {
+    // End of the document reached?
+        if ($(document).height() - $(this).height() - 512 < $(this).scrollTop()) {    
+            console.log('Loading new images');
+            if (remainingCards.length > 0){
+                $('#cards').append(remainingCards.shift())
+            }
+            
+        }
+    }); 
+
+function loadAlbum(id){
+    if (id!='localAlbum'){
         if (myAlbums.has(id)){
-            workingAlbum.key = myAlbums.get(id).key
+            $.getJSON( "../album_json/"+id, function( data ) {
+                console.log('The album requested is:');
+                console.log(data);
+                workingAlbum = data;
+                workingAlbum.key = myAlbums.get(id).key
+                localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+                $('#album_name').html('Viewing Album '+id);
+                if ("nickname" in workingAlbum){
+                    $('#nickname').html(workingAlbum.nickname);
+                }
+                if ("by" in workingAlbum){
+                    $('#by').html(workingAlbum.by);
+                }
+                if ("description" in workingAlbum){
+                    $('#album_description').html(workingAlbum.description);
+                }
+                formGallery();
+            }).fail(function(error) {
+                console.log(error.responseJSON);
+                alert(JSON.stringify(error.responseJSON))
+            });
+        }else{
+            if (viewAlbums.indexOf(id) == -1){
+                viewAlbums.push(id);
+                localStorage.setItem("viewAlbums",JSON.stringify(viewAlbums));
+            }
+            $.getJSON( "../album_json/"+id, function( data ) {
+                console.log('The album requested is:');
+                console.log(data);
+                workingAlbum = data;
+                localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+                $('#album_name').html('Viewing Album '+id);
+                if ("nickname" in workingAlbum){
+                    $('#nickname').html(workingAlbum.nickname);
+                }
+                if ("by" in workingAlbum){
+                    $('#by').html(workingAlbum.by);
+                }
+                if ("description" in workingAlbum){
+                    $('#album_description').html(workingAlbum.description);
+                }
+                formGallery();
+                formAlbumList();
+            }).fail(function(error) {
+                console.log(error.responseJSON);
+                alert(JSON.stringify(error.responseJSON))
+            });
         }
-        
-        localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
-        $('#album_name').html('Viewing Album '+id);
-        if ("nickname" in data){
-            $('#nickname').html(data.nickname);
+
+    }else{
+        workingAlbum = JSON.parse(localStorage.getItem('localAlbum'))
+        $('#album_name').html('Working On Album '+id);
+        if ("nickname" in workingAlbum){
+            $('#nickname').val(workingAlbum.nickname);
         }
-        if ("by" in data){
-            $('#by').html(data.by);
+        if ("by" in workingAlbum){
+            $('#by').val(workingAlbum.by);
         }
-        if ("description" in data){
-            $('#album_description').html(data.description);
+        if ("description" in workingAlbum){
+            $('#album_description').val(workingAlbum.description);
         }
         formGallery();
-    }).fail(function(error) {
-        console.log(error.responseJSON);
-        alert(JSON.stringify(error.responseJSON))
-    });
+        formAlbumList();
+    }
+
+
 }
 
 function formGallery(){
     var count = 0
-    var cards = $("<div class='cards'></dev>");
+    var cards = $("<div class='cards' id='cards'></dev>");
+    remainingCards = []
     for (let idx in workingAlbum.images){
         let UUID = workingAlbum.images[workingAlbum.images.length-idx-1];
         //console.log(UUID);
         var card = $("<div class='card' id='"+UUID+"'></div>");
         card.append($("<h3>"+UUID+"<h3/>"));
-        card.append($("<img src='../image/"+UUID+"'/>"));
+        card.append($("<img loading='lazy' src='../image/"+UUID+"'/>"));
         card.append($("<br/>"));
         if (!localStorage.getItem(UUID)){
             $.getJSON( "../get_info/"+UUID, function( data ) {
@@ -166,18 +231,46 @@ function formGallery(){
         }
         card.append($('<pre class="info"></pre>').html(JSON.stringify(JSON.parse(localStorage.getItem(UUID)), null, 2)));
         card.append($("<br/>"));
-        cards.append(card);
+        remainingCards.push(card);
         count++;
     }
     if (count == 0){
         $("#album_view").html('<div id = "no_result">No images in local storage.</div>');
     }else{
+        for (let i = 0; i < 3; i++) {
+            if (remainingCards.length > 0){
+                cards.append(remainingCards.shift())
+            }
+        }
         $("#album_view").html('');
         $("#album_view").append(cards);
     }
     $('#album_view').show();
 }
+function formAlbumList(){
+    console.log('refresh album options!')
+    $('#album_key').html('');
+    myAlbums.forEach (function(data, ID) {
+        // <option value="volvo">Volvo</option>
+        if (data.nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+ID+':'+data.nickname+'</option>'));
+        }else if(JSON.parse(localStorage.getItem(ID)).nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+ID+':'+JSON.parse(localStorage.getItem(ID)).nickname+'</option>'));
+        }else{
+            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'));
+        }
+    })
 
+    $('#album_key_view').html('');
+    for (i in viewAlbums){
+        viewID = viewAlbums[i];
+        if(JSON.parse(localStorage.getItem(viewID)).nickname){
+            $('#album_key_view').append($('<option value="'+viewID+'">'+viewID+':'+JSON.parse(localStorage.getItem(viewID)).nickname+'</option>'));
+        }else{
+            $('#album_key_view').append($('<option value="'+viewID+'">'+viewID+'</option>'));
+        }
+    }
+}
 </script>
 
 <footer></footer>

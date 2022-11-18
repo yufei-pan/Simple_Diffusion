@@ -578,7 +578,7 @@ def newAlbum(args):
     return json.dumps({"ID":shortUUID,"key":key})
 
 def saveAlbum(args):
-    if args['ID'] in albumDic:
+    if (args['ID'] != 'localAlbum') and (args['ID'] in albumDic):
         # we are replacing
         if not 'key' in args:
             resp = jsonify({'error' : 'Such Album exist and you do not have the right to access it! Please transmit a proper key with it!'})

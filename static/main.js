@@ -8,6 +8,7 @@ var imgParams;
 var processedParams;
 var fetchCount = 0;
 var uploadSizeLimit = 50000000;
+remainingCards = [];
 if (!localStorage.getItem("by")){
     localStorage.setItem("by",'anonymous')
 }else{
@@ -17,9 +18,12 @@ if (!localStorage.getItem("by")){
 
 var localAlbum = JSON.parse(localStorage.getItem("localAlbum"));
 if (!localAlbum){localAlbum={ID:'localAlbum',images:[],description:'My Images'}};
-var myAlbums = JSON.parse(localStorage.getItem("myAlbums"))
+localStorage.setItem("localAlbum",JSON.stringify(localAlbum));
+
+var myAlbums = JSON.parse(localStorage.getItem("myAlbums"));
 if (!myAlbums){
-    myAlbums=new Map()
+    myAlbums=new Map(Object.entries({localAlbum:{ID: 'localAlbum', key: 'localAlbum'}}))
+    localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
 }else{
     myAlbums = new Map(Object.entries(myAlbums));
 }
@@ -308,6 +312,7 @@ $(document).ready( function () {
         console.log('Clear gallery?');
         if (confirm("Are you sure you want to delete all images in this album? Note: we do not store images locally, only their UUIDs so no need to delete for disk space reasons.") == true) {
             workingAlbum.images = []
+            localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
             formGallery();
         }
     });
@@ -322,9 +327,12 @@ $(document).ready( function () {
             success: function(data) {
                 console.log('Response album UUID:');
                 console.log(data);
-                myAlbums.set(data.ID,data)
+                myAlbums.set(data.ID,data);
                 //sconsole.log(myAlbums)
-                localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)))
+                localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
+                localStorage.setItem(data.ID,JSON.stringify(workingAlbum));
+                alert('Your album is saved! Its\' Share Key is\n'+data.ID+'\nAnd its\' Edit Key is\n'+data.key+'\nYou will be able to save this information as a local file later!');
+                formAlbumList();
             },
             error:function(error) {
                 console.log(error.responseJSON);
@@ -334,29 +342,21 @@ $(document).ready( function () {
             dataType: 'json'
         });
     });
-
-    myAlbums.forEach (function(data, ID) {
-        // <option value="volvo">Volvo</option>
-        if (data.nickname){
-            $('#album_key').append($('<option value="'+ID+'">'+data.nickname+'</option>'))
-        }else if(JSON.parse(localStorage.getItem(ID)).nickname){
-            $('#album_key').append($('<option value="'+ID+'">'+JSON.parse(localStorage.getItem(ID)).nickname+'</option>'))
-        }else{
-            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'))
-        }
-    })
+    formAlbumList();
     
     $('#working_album').on( "submit", function(e){
         if ($('#album_key_in').val()){
             $.getJSON( "get_album_id/"+$('#album_key_in').val(), function( id ) {
                 myAlbums.set(id.ID,{'ID':id.ID,'key':$('#album_key_in').val()});
                 localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
+                console.log('Loading Album '+id.ID)
                 loadAlbum(id.ID);
             }).fail(function(error) {
                 console.log(error.responseJSON);
                 alert(JSON.stringify(error.responseJSON));
             });
         }else{
+            console.log('Loading Album '+$('#album_key').val())
             loadAlbum($('#album_key').val());
         }
         e.preventDefault();
@@ -389,12 +389,20 @@ $(document).ready( function () {
     });
 
 
-
-
-
-
+    $(window).scroll(function () {
+        // End of the document reached?
+            if ($(document).height() - $(this).height() - 512 < $(this).scrollTop()) {    
+                console.log('Loading new images');
+                if (remainingCards.length > 0){
+                    $('#cards').append(remainingCards.shift())
+                }
+                
+            }
+        }); 
 
 });
+
+
 
 function loadImage(uuidReq){
     console.log('Load image using');
@@ -606,13 +614,14 @@ function processImage(regen){
 
 function formGallery(){
     var count = 0
-    var cards = $("<div class='cards'></dev>");
+    var cards = $("<div class='cards' id='cards'></dev>");
+    remainingCards = []
     for (let idx in workingAlbum.images){
         let UUID = workingAlbum.images[workingAlbum.images.length-idx-1];
         //console.log(UUID);
         var card = $("<div class='card' id='"+UUID+"'></div>");
         card.append($("<h3>"+UUID+"<h3/>"));
-        card.append($("<img src='image/"+UUID+"'/>"));
+        card.append($("<img loading='lazy' src='image/"+UUID+"'/>"));
         card.append($("<br/>"));
         if (!localStorage.getItem(UUID)){
             $.getJSON( "get_info/"+UUID, function( data ) {
@@ -641,12 +650,17 @@ function formGallery(){
         });
         card.append(loadButton);
         card.append($("<br/>"));
-        cards.append(card);
+        remainingCards.push(card);
         count++;
     }
     if (count == 0){
         $("#album_view").html('<div id = "no_result">No images in local storage.</div>');
     }else{
+        for (let i = 0; i < 3; i++) {
+            if (remainingCards.length > 0){
+                cards.append(remainingCards.shift())
+            }
+        }
         $("#album_view").html('');
         $("#album_view").append(cards);
     }
@@ -663,27 +677,44 @@ function deleteImageFromGallery(idx,UUID){
 };
 
 function loadAlbum(id){
-    $.getJSON( "album_json/"+id, function( data ) {
-        console.log('The album requested is:');
-        console.log(data);
-        workingAlbum = data;
-        workingAlbum.key = myAlbums.get(id).key
-        localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+    if (id!='localAlbum'){
+        $.getJSON( "album_json/"+id, function( data ) {
+            console.log('The album requested is:');
+            console.log(data);
+            workingAlbum = data;
+            workingAlbum.key = myAlbums.get(id).key
+            localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
+            $('#album_name').html('Working On Album '+id);
+            if ("nickname" in workingAlbum){
+                $('#nickname').val(workingAlbum.nickname);
+            }
+            if ("by" in workingAlbum){
+                $('#by').val(workingAlbum.by);
+            }
+            if ("description" in workingAlbum){
+                $('#album_description').val(workingAlbum.description);
+            }
+            formGallery();
+        }).fail(function(error) {
+            console.log(error.responseJSON);
+            alert(JSON.stringify(error.responseJSON))
+        });
+    }else{
+        workingAlbum = JSON.parse(localStorage.getItem('localAlbum'))
         $('#album_name').html('Working On Album '+id);
-        if ("nickname" in data){
-            $('#nickname').val(data.nickname);
+        if ("nickname" in workingAlbum){
+            $('#nickname').val(workingAlbum.nickname);
         }
-        if ("by" in data){
-            $('#by').val(data.by);
+        if ("by" in workingAlbum){
+            $('#by').val(workingAlbum.by);
         }
-        if ("description" in data){
-            $('#album_description').val(data.description);
+        if ("description" in workingAlbum){
+            $('#album_description').val(workingAlbum.description);
         }
         formGallery();
-    }).fail(function(error) {
-        console.log(error.responseJSON);
-        alert(JSON.stringify(error.responseJSON))
-    });
+    }
+
+
 }
 
 function addImageToAlbum(imgUUID,imgParams){
@@ -692,4 +723,18 @@ function addImageToAlbum(imgUUID,imgParams){
         workingAlbum.images.push(imgUUID);
         localStorage.setItem(workingAlbum.ID, JSON.stringify(workingAlbum));
     }
+}
+
+function formAlbumList(){
+    $('#album_key').html('');
+    myAlbums.forEach (function(data, ID) {
+        // <option value="volvo">Volvo</option>
+        if (data.nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+ID+':'+data.nickname+'</option>'));
+        }else if(JSON.parse(localStorage.getItem(ID)).nickname){
+            $('#album_key').append($('<option value="'+ID+'">'+ID+':'+JSON.parse(localStorage.getItem(ID)).nickname+'</option>'));
+        }else{
+            $('#album_key').append($('<option value="'+ID+'">'+ID+'</option>'));
+        }
+    })
 }
