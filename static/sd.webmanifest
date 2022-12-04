@@ -1,0 +1,16 @@
+{
+    "name": "RESTful Simple Stable Diffusion Web Client",
+    "short_name": "SDClient",
+    "description": "A RESTful simple client build on jquery for stable diffusion ui and hugging face servers running apis for this to connect to",
+    "icons": [
+      {
+        "src": "ico.png",
+        "sizes": "436x436",
+        "type": "image/png"
+      }
+    ],
+    "start_url": "index.html",
+    "display": "fullscreen",
+    "theme_color": "#687188",
+    "background_color": "#687188"
+  }

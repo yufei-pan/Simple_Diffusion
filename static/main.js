@@ -407,7 +407,7 @@ $(document).ready( function () {
 
     $(window).scroll(function () {
         // End of the document reached?
-            if ($(document).height() - $(this).height() - 512 < $(this).scrollTop()) {    
+            if ($(document).height() - $(this).height() - 1920 < $(this).scrollTop()) {    
                 console.log('Loading new images');
                 if (remainingCards.length > 0){
                     $('#cards').append(remainingCards.shift())
