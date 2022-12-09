@@ -7,26 +7,69 @@
     <title>Simple Diffusion</title>
     <link rel = "icon" href = "static/ico.png" type = "image/x-icon">
     <link rel="manifest" href="static/sd.webmanifest" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
-<body>
-<header>Simple Diffusion</header>
-<meta name="viewport" content="width=device-width">
-<h1>Simple Diffusion - RESTful Diffusion Web Client</h1>
-<a href='https://zopyr.us'>By Kes</a><br>
-<a href="album/" >View my albums!</a> 
+<body >
+    <!-- class="text-light bg-dark" -->
+<header></header>
+<div class="navbar navbar-expand-xl fixed-top" style="background-color: Honeydew;">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="/">Simple Diffusion - RESTful Diffusion Web Client</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarTogglerDemo02" aria-controls="navbarTogglerDemo02" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarTogglerDemo02">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="/">Home</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="album/" >View my albums!</a> 
+                </li>
+            </ul>
+            <button type="button" class="btn btn-outline-secondary me-2 mb-1" data-bs-toggle="modal" data-bs-target="#add_album">
+                Load Edit Key
+            </button>
+            <form class="d-flex w-50" id="working_album">
+                <select class="form-select mx-0 float-end " id="album_key" name="album_key">
+                </select>
+            </form>
+        </div>
+    </div>
+</div>
 
-<h2>If you have an album you want to work on, select one:</h2>
-<form id="working_album">
-        <label for="album_key">Choose an album:</label>
-        <select id="album_key" name="album_key">
-        </select>
-        <br>
-        <label for="album_key_in">Or Using An Album Access Key:</label><br>
-        <input type="text" id="album_key_in" name="album_key_in"><br>
-        <input type="submit" value="Load!">
-</form>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
 
-<div id = 'Load_Image'>
+
+
+<div class="modal fade" id="add_album" tabindex="-1" aria-labelledby="add_albumLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h1 class="modal-title fs-5" id="add_albumLabel">Load Using An Album Edit Key<br/>(A long uuid string)</h1>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <form class='container' id="add_album">
+                <div class="input-group mb-3">
+                    <input class="form-control" type="text" id="album_key_in" name="album_key_in" placeholder="982520cb-4197-44bd-b9e3-8df9ea767edd"><br>
+                    <input class="btn btn-outline-secondary" type="submit" value="Load!">
+                </div>
+            </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+<div class='container' id = 'Load_Image'>
     <h2>First step: Load Image </h2>
     <!-- Here we load the image somehow -->
     <!-- We either generate from promt, -->
@@ -34,109 +77,201 @@
     <!-- or upload a image from local machine, -->
     <!-- or get a image silimar to a image in server db, -->
     <!-- or maybe load a image from a url (future feature?), -->
-    
-    <form id="generate">
-        <fieldset>
-            <legend>Method 1: Generate using prompt:</legend>
-            <label for="positive_prompt_gen">Positive Prompt:</label><br>
-            <input type="text" id="positive_prompt_gen" name="positive_prompt" value="high quality,highres,1girl,cloud, scenery, sunset"><br>
-            <label for="negative_prompt_gen">Negative Prompt: (cancel pre-filled values with 'no negative prompt')</label><br>
-            <input type="text" id="negative_prompt_gen" name="negative_prompt" value=""><br><br>
-            <label for="ratio">(Width - Height) / 512: <p id="ratioDisplay">1</p></label>
-            <input type="range" id="ratio" name="ratio" min="-2" max="2"value = "1" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
-            <label for="sampler_gen">Sampler Method:</label><br>
-            <input type="radio" id="DPM2KA_gen" name="sampler_gen" value="DPM2 Karras" checked="checked">
-            <label for="DPM2KA_gen">Default: DMP2 Karras</label><br>
-            <input type="radio" id="Heun_gen" name="sampler_gen" value="Heun">
-            <label for="Heun_gen">More Creative: Heun</label><br>
-            <input type="radio" id="DDIM_gen" name="sampler_gen" value="DDIM">
-            <label for="DDIM_gen">Neural: DDIM</label><br>
-            <input type="radio" id="Eular_a_gen" name="sampler_gen" value="Euler a">
-            <label for="Eular_a_gen">Something different: Eular Ancestry</label><br>
-            <input type="radio" id="LMS_gen" name="sampler_gen" value="LMS">
-            <label for="LMS_gen">Stable: LMS</label><br><br>
-            <label for="seed_gen">Seed:</label><br>
-            <input type="text" id="seed_gen" name="seed" value="-1"><br><br>
-            <label for="steps_delta_percent">percent off default step number:<br/> (can result in worse result!)<p id="stepDeltaDisplay">0</p></label>
-            <input type="range" id="step_delta" name="steps_delta_percent" min="-100" max="50"value = "0" step='1' oninput="stepDeltaDisplay.innerText = this.value"><br> <br>
-            <input type="submit" value="Generate!">
-        </fieldset>
-    </form>
-    <form id="load_from_server">
-        <fieldset>
-            <legend>Method 2: Load a image in server:</legend>
-            <label for="load_uuid">Load image UUID:</label><br>
-            <input type="text" id="load_uuid" name="load_uuid" value=""><br>
-            <input type="submit" value="Load!">
-        </fieldset>
-    </form>
-    <form id="generate_like">
-        <fieldset>
-            <legend>Method 3: Generate an image like a image in server:</legend>
-            <label for="like_uuid">Generate use image UUID:</label><br>
-            <input type="text" id="like_uuid" name="like_uuid" value=""><br>
-            <input type="submit" value="Generate!">
-        </fieldset>
-    </form>
-    <form id="upload_image">
-        <fieldset>
-            <legend>Method 4: Upload and load a image from local machine:</legend>
-            <label for="myfile">Select a file:</label>
-            <input type="file" multiple="" id="myfile" name="file" accept="image/x-png,image/jpeg,image/webp"><br><br>
-            <!-- <input type="submit" value="Load!"> -->
-            <div id="progress-wrp">
-                <div class="progress-bar"></div>
-                <div class="status">0%</div>
+    <div class="accordion" id="generate_accordions">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="gen_prompt_header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#gen_prompt_collapse" aria-expanded="true" aria-controls="gen_prompt_collapse">
+                    Method 1: Generate using prompt:
+                </button>
+            </h2>
+            <div id="gen_prompt_collapse" class="accordion-collapse collapse show gen_collapse" aria-labelledby="gen_prompt_header" data-bs-parent="#generate_accordions">
+                <div class="accordion-body">
+                    <form id="generate">
+                        <div class="form-floating mb-2">
+                            <input class="form-control" type="text" id="positive_prompt_gen" name="positive_prompt" placeholder="high quality,highres,1girl,cloud, scenery, sunset" value="high quality,highres,1girl,cloud, scenery, sunset"><br>
+                            <label for="positive_prompt_gen">Positive Prompt:</label>
+                        </div>
+                        <div class="form-floating">
+                            <input class="form-control" type="text" id="negative_prompt_gen" name="negative_prompt" placeholder="Server Predefined Values will be append to input." value=""><br><br>
+                            <label for="negative_prompt_gen">Negative Prompt (cancel pre-filled values with 'no negative prompt')</label>
+                        </div>
+
+                        <label class="form-label" for="ratio">(Width - Height) / 512: </label>
+                        <div class="row justify-content-between">
+                            <div class="col text-start">
+                                -2
+                            </div>
+                            <div class="col text-center" id="ratioDisplay">
+                                1
+                            </div>
+                            <div class="col text-end">
+                                2
+                            </div>
+                        </div>
+                        <div class="range">
+                            <input class="form-range" type="range" id="ratio" name="ratio" min="-2" max="2"value = "1" step='0.25' oninput="ratioDisplay.innerText = this.value"><br> <br>
+                        </div>
+                        <label class="form-check-label" for="sampler_gen">Sampler Method:</label><br>
+                        <div class="row">
+                            <div class="col-md-auto my-2">
+                                <input class="btn-check" type="radio" id="DPM2KA_gen" name="sampler_gen" value="DPM2 Karras" checked="checked">
+                                <label class="btn btn-outline-success" for="DPM2KA_gen">Default: DMP2 Karras</label>
+                            </div>
+                            <div class="col-md-auto my-2">
+                                <input class="btn-check" type="radio" id="Heun_gen" name="sampler_gen" value="Heun">
+                                <label class="btn btn-outline-success" for="Heun_gen">More Creative: Heun</label>
+                            </div>
+                            <div class="col-md-auto my-2">
+                                <input class="btn-check" type="radio" id="DDIM_gen" name="sampler_gen" value="DDIM">
+                                <label class="btn btn-outline-success" for="DDIM_gen">Neural: DDIM</label>
+                            </div>
+                            <div class="col-md-auto my-2">
+                                <input class="btn-check" type="radio" id="Eular_a_gen" name="sampler_gen" value="Euler a">
+                                <label class="btn btn-outline-success" for="Eular_a_gen">Something different: Eular Ancestry</label>
+                            </div>
+                            <div class="col-md-auto my-2">
+                                <input class="btn-check" type="radio" id="LMS_gen" name="sampler_gen" value="LMS">
+                                <label class="btn btn-outline-success" for="LMS_gen">Stable: LMS</label>
+                            </div>
+                        </div>
+                        <br/>
+                        <div class="form-floating">
+                            <input class="form-control" type="text" id="seed_gen" name="seed" placeholder="-1" value="-1"><br><br>
+                            <label for="seed_gen">Seed:</label>
+                        </div>
+
+                        <label class="form-label" for="steps_delta_percent">percent off default step number:<br/> (can result in worse result!)</label>
+                        <div class="row justify-content-between">
+                            <div class="col text-start">
+                                -100
+                            </div>
+                            <div class="col text-center" id="stepDeltaDisplay">
+                                0
+                            </div>
+                            <div class="col text-end">
+                                50
+                            </div>
+                        </div>
+                        <div class="range">
+                            <input class="form-range" type="range" id="step_delta" name="steps_delta_percent" min="-100" max="50"value = "0" step='1' oninput="stepDeltaDisplay.innerText = this.value"><br> <br>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <input class="btn btn-success" type="submit" value="Generate!">
+                        </div>
+                    </form>
+                </div>
             </div>
-        </fieldset>
-    </form>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="gen_load_header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gen_load_collapse" aria-expanded="false" aria-controls="gen_load_collapse">
+                Method 2: Load a image in server:
+              </button>
+            </h2>
+            <div id="gen_load_collapse" class="accordion-collapse collapse gen_collapse" aria-labelledby="gen_load_header" data-bs-parent="#generate_accordions">
+              <div class="accordion-body">
+                <form id="load_from_server">
+                    <div class="form-floating">
+                        <input class="form-control" type="text" id="load_uuid" name="load_uuid" placeholder="Image UUID" value=""><br>
+                        <label for="load_uuid">Load Image UUID</label>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <input class="btn btn-success" type="submit" value="Load!">
+                    </div>
+                </form>
+              </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="gen_like_header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gen_like_collapse" aria-expanded="false" aria-controls="gen_like_collapse">
+                Method 3: Generate an image like a image in server:
+              </button>
+            </h2>
+            <div id="gen_like_collapse" class="accordion-collapse collapse gen_collapse" aria-labelledby="gen_like_header" data-bs-parent="#generate_accordions">
+              <div class="accordion-body">
+                <form id="generate_like">
+                    <div class="form-floating">
+                        <input class="form-control" type="text" id="like_uuid" name="like_uuid" placeholder="Image UUID" value=""><br>
+                        <label for="like_uuid">Generate image UUID</label>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <input class="btn btn-success" type="submit" value="Generate!">
+                    </div>
+                </form>
+              </div>
+            </div>
+        </div>
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="gen_upload_header">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gen_upload_collapse" aria-expanded="false" aria-controls="gen_upload_collapse">
+                Method 4: Upload and load a image from local machine:
+              </button>
+            </h2>
+            <div id="gen_upload_collapse" class="accordion-collapse collapse gen_collapse" aria-labelledby="gen_upload_header" data-bs-parent="#generate_accordions">
+              <div class="accordion-body">
+                <form id="upload_image">
+                    <fieldset>
+                        <input class="form-control" type="file" multiple id="myfile" name="file" accept="image/x-png,image/jpeg,image/webp">
+                        <!-- <input type="submit" value="Load!"> -->
+                        <div id="progress-wrp">
+                            <div class="progress-bar"></div>
+                            <div class="status">0%</div>
+                        </div>
+                    </fieldset>
+                </form>
+              </div>
+            </div>
+        </div>
+    </div>
 </div>
 <br/>
 <br/>
-<h3 id="queue_pos_display">
-    <div id="queue_pos">
-        Position In Queue: Press Generate First!
-    </div>
-    <div id="imageUUID">
-        Image UUID :       Press Generate First!
-    </div>
-</h3>
-<div id="Source_Image_View">
+<div class='container'>
+    <h3 id="queue_pos_display">
+        <div id="queue_pos">
+            Position In Queue: Press Generate First!
+        </div>
+        <div id="imageUUID">
+            Image UUID :       Press Generate First!
+        </div>
+    </h3>
+</div>
+<div class='container' id="Source_Image_View">
     <!-- Here is the image view window -->
     <!-- We will also have a button to download the picture -->
     <img id="Source_Image" src="static/source_image_placeholder.webp" alt="Source Image Here"><br>
     If image is not loaded properly:
     <button type="button" id="reload_source">Reload Image</button><br>
+    <br/>
+    <div class='container' id="Info" class="info">
+        <!-- Here we will put a button to load related info about the image -->
+        <button type="button" id="info_button">Info about Pic Above</button>
+        <pre id="info_display"></pre>
+    </div>
 </div>
 <br/>
 <br/>
-<div id="Info" class="info">
-    <!-- Here we will put a button to load related info about the image -->
-    <button type="button" id="info_button">Info about Pic Above</button>
-    <pre id="info_display"></pre>
-</div>
-<br/>
-<br/>
-<div id = 'Queue_View'>
+<div class='container' id = 'Queue_View'>
     <!-- Here is the queue from the server, updated automaticly  -->
     <h3>Server Queue</h3>
     <button type="button" id="stop_queue">Stop fetching server queue</button>
     <button type="button" id="start_queue">Start fetching server queue for 1 minute</button>
     <table id = 'server_queue_display'>
         <tr>
-          <th>Position</th>
-          <th>UUID</th>
+        <th>Position</th>
+        <th>UUID</th>
         </tr>
         <tbody id="queue_content">
         </tbody>
-      </table>
+    </table>
 </div>
 <br/>
 <br/>
 <br/>
 
 
-<div id="Process_div">
+<div class='container' id="Process_div">
     <!-- Here we put the prompts for further processing -->
     <!-- Here we put a Button to upscale the Image using SwinIR -->
     <!-- Will adapt height and width automaticlly -->
@@ -171,16 +306,17 @@
         </fieldset>
     </form>
 </div>
-
-<h3 id="queue_pos_display_process">
-    <div id="queue_pos_process">
-        Position In Queue:     Press Generate First!
-    </div>
-    <div id="processUUID">
-        Processed Image UUID : Press Generate First!
-    </div>
-</h3>
-<div id="Final_Image_View">
+<div class='container'>
+    <h3 id="queue_pos_display_process">
+        <div id="queue_pos_process">
+            Position In Queue:     Press Generate First!
+        </div>
+        <div id="processUUID">
+            Processed Image UUID : Press Generate First!
+        </div>
+    </h3>
+</div>
+<div class='container' id="Final_Image_View">
     <!-- Here is the image view for image after diffusing -->
     <!-- Also a Download button will be here -->
     <!-- Also a button to send to original image view -->
@@ -195,42 +331,47 @@
     <!-- </a> -->
     <br/>
     <button type="button" id="Send_to_be_processed">I would like this image to be processed</button><br>
+
+    <div class='container' id="Processed_Info" class="info">
+        <!-- Here we will put a button to load related info about the image -->
+        <button type="button" id="processed_info_button">Info about the processed Pic Above</button>
+        <pre id="processed_info_display"></pre>
+    </div>
+</div>
+<br/>
+<br/>
+<br/>
+<br/>
+<div class='container'>
+    <h2 id="album_name">Gallery </h2>
+    <label for="nickname">Nick name:</label>
+    <input type="text" id="nickname" name="nickname"><br>
+    <label for="by">By:</label>
+    <input type="text" id="by" name="by" value="anonymous"><br>
+    <label for="album_description">Album Description:</label><br>
+    <textarea rows="5" cols="60" type="text" id="album_description" name="album_description" placeholder="My Album"></textarea>
+    <br>
+    <button type="button" id="clear_album">Clear Images in My Gallery</button>
+    <button type="button" id="export_album">Save current gallery to server</button>
+    <button type="button" id="reverse_album">reverse album order</button>
+    <div id="album_view">
+        <!-- An album of image generated by this machine (saved locally) -->
+        <!-- What is saved is only the UUID and a nickname for each image -->
+        <!-- Each image will have two button - delete and rename -->
+        <!-- Also a button to save album locally (just a csv)-->
+        <!-- Maybe a button to get a shareable link -->
+        <!-- Shareable link is done by transmit the image ids to the server -->
+        <!-- And the server will store this data in a albums db, access by another uuid -->
+        <!-- Image is just raw doog loaded -->
+    </div>
 </div>
 
-<div id="Processed_Info" class="info">
-    <!-- Here we will put a button to load related info about the image -->
-    <button type="button" id="processed_info_button">Info about the processed Pic Above</button>
-    <pre id="processed_info_display"></pre>
-</div>
-<br/>
-<br/>
-<br/>
-<br/>
-<h2 id="album_name">Gallery </h2>
-<label for="nickname">Nick name:</label>
-<input type="text" id="nickname" name="nickname"><br>
-<label for="by">By:</label>
-<input type="text" id="by" name="by" value="anonymous"><br>
-<label for="album_description">Album Description:</label><br>
-<textarea rows="5" cols="60" type="text" id="album_description" name="album_description" placeholder="My Album"></textarea>
-<br>
-<button type="button" id="clear_album">Clear Images in My Gallery</button>
-<button type="button" id="export_album">Save current gallery to server</button>
-<button type="button" id="reverse_album">reverse album order</button>
-<div id="album_view">
-    <!-- An album of image generated by this machine (saved locally) -->
-    <!-- What is saved is only the UUID and a nickname for each image -->
-    <!-- Each image will have two button - delete and rename -->
-    <!-- Also a button to save album locally (just a csv)-->
-    <!-- Maybe a button to get a shareable link -->
-    <!-- Shareable link is done by transmit the image ids to the server -->
-    <!-- And the server will store this data in a albums db, access by another uuid -->
-    <!-- Image is just raw doog loaded -->
-</div>
 
 
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
 <script type = "text/javascript" src="static/main.js">
 </script>
-<footer></footer>
+<footer><a href='https://zopyr.us'>By Kes</a><br></footer>
 </body>
 </html>

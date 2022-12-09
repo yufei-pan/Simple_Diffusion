@@ -144,6 +144,7 @@ $(document).ready( function () {
                 $('#queue_pos').html("Position In Queue: "+data['Queue']);
                 $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
                 $('#Load_Image').hide();   
+                $('.gen_collapse').collapse('hide');
                 $('#Process_div').hide();     
                 $('#info_display').html(''); 
                 console.log('Start Fetching Queue!');
@@ -360,21 +361,24 @@ $(document).ready( function () {
 
     formAlbumList();
     
-    $('#working_album').on( "submit", function(e){
-        if ($('#album_key_in').val()){
-            $.getJSON( "get_album_id/"+$('#album_key_in').val(), function( id ) {
-                myAlbums.set(id.ID,{'ID':id.ID,'key':$('#album_key_in').val()});
-                localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
-                console.log('Loading Album '+id.ID)
-                loadAlbum(id.ID);
-            }).fail(function(error) {
-                console.log(error.responseJSON);
-                alert(JSON.stringify(error.responseJSON));
-            });
-        }else{
-            console.log('Loading Album '+$('#album_key').val())
-            loadAlbum($('#album_key').val());
-        }
+    $('#working_album').on( "change", function(e){
+        console.log('Loading Album '+$('#album_key').val())
+        loadAlbum($('#album_key').val());
+        e.preventDefault();
+    });
+
+    $('#add_album').on( "change", function(e){
+        $.getJSON( "get_album_id/"+$('#album_key_in').val(), function( id ) {
+            myAlbums.set(id.ID,{'ID':id.ID,'key':$('#album_key_in').val()});
+            localStorage.setItem("myAlbums",JSON.stringify(Object.fromEntries(myAlbums)));
+            console.log('Loading Album '+id.ID)
+            loadAlbum(id.ID);
+            e.preventDefault();
+        }).fail(function(error) {
+            console.log(error.responseJSON);
+            alert(JSON.stringify(error.responseJSON));
+            e.preventDefault();
+        });
         e.preventDefault();
     });
 
@@ -455,6 +459,7 @@ function generateLike(uuidReq){
         $('#queue_pos').html("Position In Queue: "+data['Queue']);
         $("#Source_Image").attr("src",'static/please_wait_until_your_image.webp');  
         $('#Load_Image').hide();  
+        $('.gen_collapse').collapse('hide');
         $('#Process_div').hide();    
         $('#info_display').html('');   
         console.log('Start Fetching Queue!');
